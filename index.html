@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZenFlo — ADHD Workplace App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0D1B2A;--navy2:#162235;--navy3:#1e2f44;--teal:#1B8A6B;--teal-light:#4DC4A0;--teal-glow:rgba(77,196,160,0.15);--amber:#E8A84C;--white:#F4F7F5;--muted:rgba(244,247,245,0.5);--border:rgba(77,196,160,0.18);--danger:#e06060;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);min-height:100vh;}
+#loading{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .4s;}
+.load-logo{font-family:'DM Serif Display',serif;font-size:2.2rem;color:var(--teal-light);}
+#auth-screen{display:none;min-height:100vh;align-items:center;justify-content:center;padding:20px;}
+.auth-box{background:var(--navy2);border:1px solid var(--border);border-radius:16px;padding:38px 34px;width:min(420px,100%);box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.auth-logo{font-family:'DM Serif Display',serif;font-size:2.1rem;color:var(--teal-light);text-align:center;margin-bottom:4px;}
+.auth-sub{text-align:center;color:var(--muted);font-size:.84rem;margin-bottom:26px;}
+.auth-tabs{display:flex;background:var(--navy);border-radius:10px;padding:4px;margin-bottom:22px;gap:4px;}
+.auth-tab{flex:1;padding:9px;border:none;background:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.84rem;font-weight:500;border-radius:8px;cursor:pointer;transition:.2s;}
+.auth-tab.active{background:var(--teal);color:#fff;}
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px;font-weight:500;}
+.field input{width:100%;padding:11px 13px;background:var(--navy);border:1px solid var(--border);border-radius:10px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none;transition:.2s;}
+.field input:focus{border-color:var(--teal-light);}
+.btn-primary{width:100%;padding:13px;background:var(--teal);border:none;border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:.95rem;font-weight:600;cursor:pointer;transition:.2s;margin-top:4px;}
+.btn-primary:hover{background:var(--teal-light);}
+.auth-msg{text-align:center;font-size:.82rem;color:var(--danger);margin-top:12px;min-height:18px;}
+#app-screen{display:none;min-height:100vh;flex-direction:column;}
+.top-bar{background:var(--navy2);border-bottom:1px solid var(--border);padding:0 18px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;}
+.top-logo{font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--teal-light);}
+.top-right{display:flex;align-items:center;gap:10px;}
+.badge-pro{background:var(--amber);color:var(--navy);font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:20px;}
+.badge-free{background:var(--navy3);color:var(--muted);font-size:.68rem;font-weight:600;padding:3px 8px;border-radius:20px;border:1px solid var(--border);}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:.76rem;padding:5px 11px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
+.btn-logout:hover{color:var(--white);}
+.content{flex:1;padding:22px 18px;max-width:680px;margin:0 auto;width:100%;}
+.panel{display:none;}
+.panel.active{display:block;}
+.panel-title{font-family:'DM Serif Display',serif;font-size:1.55rem;margin-bottom:5px;}
+.panel-sub{color:var(--muted);font-size:.83rem;margin-bottom:22px;}
+.card{background:var(--navy2);border:1px solid var(--border);border-radius:13px;padding:18px;margin-bottom:13px;}
+.card-label{font-size:.73rem;font-weight:600;color:var(--teal-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;}
+.brain-textarea{width:100%;min-height:130px;background:var(--navy);border:1px solid var(--border);border-radius:11px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:.93rem;padding:13px;resize:vertical;outline:none;line-height:1.6;}
+.brain-textarea:focus{border-color:var(--teal-light);}
+.row-btns{display:flex;gap:10px;margin-top:11px;}
+.btn-teal{padding:10px 18px;background:var(--teal);border:none;border-radius:9px;color:#fff;font-family:'DM Sans',sans-serif;font-size:.87rem;font-weight:500;cursor:pointer;transition:.2s;}
+.btn-teal:hover{background:var(--teal-light);}
+.btn-outline{padding:10px 18px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.87rem;cursor:pointer;transition:.2s;}
+.btn-outline:hover{color:var(--white);border-color:var(--muted);}
+.dump-item{background:var(--navy);border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:9px;position:relative;}
+.dump-text{font-size:.87rem;line-height:1.6;white-space:pre-wrap;padding-right:24px;}
+.dump-date{font-size:.71rem;color:var(--muted);margin-top:5px;}
+.dump-del{position:absolute;top:9px;right:11px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:2px 5px;border-radius:5px;}
+.dump-del:hover{color:var(--danger);}
+.task-form{display:flex;flex-direction:column;gap:9px;margin-bottom:18px;}
+.task-input{background:var(--navy);border:1px solid var(--border);border-radius:9px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:.88rem;padding:11px 13px;outline:none;transition:.2s;width:100%;}
+.task-input:focus{border-color:var(--teal-light);}
+.steps-list{display:flex;flex-direction:column;gap:6px;}
+.step-row{display:flex;gap:7px;align-items:center;}
+.add-step{background:none;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:.78rem;padding:7px;cursor:pointer;width:100%;margin-top:3px;transition:.2s;font-family:'DM Sans',sans-serif;}
+.add-step:hover{border-color:var(--teal-light);color:var(--teal-light);}
+.task-item{background:var(--navy);border:1px solid var(--border);border-radius:11px;padding:13px 15px;margin-bottom:9px;transition:.3s;}
+.task-item.done{opacity:.45;}
+.task-header{display:flex;align-items:flex-start;gap:9px;}
+.task-check{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:.2s;}
+.task-check.checked{background:var(--teal);border-color:var(--teal);}
+.task-title-text{flex:1;font-size:.9rem;font-weight:500;}
+.task-del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.88rem;padding:0 3px;}
+.task-del-btn:hover{color:var(--danger);}
+.task-steps{margin-top:9px;padding-left:29px;display:flex;flex-direction:column;gap:4px;}
+.task-step{font-size:.81rem;color:var(--muted);position:relative;padding-left:12px;}
+.task-step::before{content:'·';position:absolute;left:0;color:var(--teal-light);}
+.no-items{text-align:center;color:var(--muted);font-size:.84rem;padding:28px 0;}
+.script-search{width:100%;background:var(--navy);border:1px solid var(--border);border-radius:10px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:.89rem;padding:11px 13px;outline:none;margin-bottom:16px;transition:.2s;}
+.script-search:focus{border-color:var(--teal-light);}
+.script-cats{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
+.cat-btn{padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.77rem;cursor:pointer;transition:.2s;}
+.cat-btn.active{background:var(--teal);border-color:var(--teal);color:#fff;}
+.script-card{background:var(--navy);border:1px solid var(--border);border-radius:11px;margin-bottom:9px;overflow:hidden;}
+.script-header{padding:13px 15px;display:flex;align-items:center;gap:10px;cursor:pointer;}
+.script-icon{width:32px;height:32px;background:var(--teal-glow);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;}
+.script-name{font-size:.88rem;font-weight:500;}
+.script-cat-tag{font-size:.69rem;color:var(--muted);}
+.script-body{display:none;padding:0 15px 15px;border-top:1px solid var(--border);}
+.script-body.open{display:block;}
+.script-text{font-size:.84rem;color:var(--muted);line-height:1.8;margin-top:11px;white-space:pre-wrap;}
+.copy-btn{margin-top:11px;padding:7px 13px;background:var(--teal-glow);border:1px solid var(--teal);border-radius:7px;color:var(--teal-light);font-size:.77rem;font-family:'DM Sans',sans-serif;cursor:pointer;transition:.2s;}
+.copy-btn:hover{background:var(--teal);color:#fff;}
+.timer-wrap{text-align:center;padding:16px 0;}
+.timer-ring{position:relative;width:180px;height:180px;margin:0 auto 18px;}
+.timer-ring svg{transform:rotate(-90deg);}
+.ring-bg{fill:none;stroke:var(--border);stroke-width:7;}
+.ring-prog{fill:none;stroke:var(--teal-light);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset .9s linear;}
+.ring-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.timer-display{font-family:'DM Serif Display',serif;font-size:2.8rem;color:var(--teal-light);letter-spacing:1px;}
+.timer-label{font-size:.83rem;color:var(--muted);margin-bottom:22px;}
+.timer-presets{display:flex;gap:8px;justify-content:center;margin-bottom:24px;flex-wrap:wrap;}
+.preset-btn{padding:7px 15px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.8rem;cursor:pointer;transition:.2s;}
+.preset-btn.active{background:var(--teal);border-color:var(--teal);color:#fff;}
+.timer-controls{display:flex;gap:11px;justify-content:center;}
+.timer-btn{padding:13px 30px;border-radius:11px;border:none;font-family:'DM Sans',sans-serif;font-size:.93rem;font-weight:600;cursor:pointer;transition:.2s;}
+.timer-start{background:var(--teal);color:#fff;}
+.timer-start:hover{background:var(--teal-light);}
+.timer-reset{background:var(--navy2);border:1px solid var(--border);color:var(--muted);}
+.timer-reset:hover{color:var(--white);}
+.checkin-row{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:18px;}
+.mood-btn{padding:9px 14px;border-radius:11px;border:1px solid var(--border);background:none;cursor:pointer;transition:.2s;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.mood-btn span.mood-lbl{font-size:.68rem;color:var(--muted);}
+.mood-btn.selected{border-color:var(--teal-light);background:var(--teal-glow);}
+.energy-bar{display:flex;gap:9px;}
+.energy-dot{width:34px;height:34px;border-radius:50%;border:2px solid var(--border);cursor:pointer;transition:.2s;background:none;}
+.energy-dot.e1.selected{background:#5c9e7a;border-color:#5c9e7a;}
+.energy-dot.e2.selected{background:#8bc17a;border-color:#8bc17a;}
+.energy-dot.e3.selected{background:#c5c96e;border-color:#c5c96e;}
+.energy-dot.e4.selected{background:#e8a74c;border-color:#e8a74c;}
+.energy-dot.e5.selected{background:#e07060;border-color:#e07060;}
+.checkin-note{width:100%;background:var(--navy);border:1px solid var(--border);border-radius:10px;color:var(--white);font-family:'DM Sans',sans-serif;font-size:.87rem;padding:11px 13px;min-height:75px;outline:none;resize:vertical;margin-bottom:13px;}
+.checkin-note:focus{border-color:var(--teal-light);}
+.checkin-done{background:var(--navy2);border:1px solid var(--teal-light);border-radius:12px;padding:24px;text-align:center;}
+.checkin-done-emoji{font-size:2rem;margin-bottom:8px;}
+.checkin-done-text{color:var(--teal-light);font-weight:500;}
+.winddown-steps{display:flex;flex-direction:column;gap:12px;}
+.wd-step{background:var(--navy);border:1px solid var(--border);border-radius:11px;padding:15px 17px;display:flex;align-items:flex-start;gap:13px;}
+.wd-num{width:26px;height:26px;background:var(--teal-glow);border:1px solid var(--teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.73rem;font-weight:600;color:var(--teal-light);flex-shrink:0;margin-top:1px;}
+.wd-content h4{font-size:.88rem;font-weight:600;margin-bottom:3px;}
+.wd-content p{font-size:.81rem;color:var(--muted);line-height:1.6;}
+.wd-check-btn{margin-top:9px;padding:6px 11px;background:none;border:1px solid var(--border);border-radius:7px;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.73rem;cursor:pointer;transition:.2s;}
+.wd-check-btn.done{background:var(--teal-glow);border-color:var(--teal);color:var(--teal-light);}
+.bottom-nav{background:var(--navy2);border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 3px 11px;background:none;border:none;color:var(--muted);font-size:.61rem;font-family:'DM Sans',sans-serif;cursor:pointer;transition:.2s;gap:4px;}
+.nav-btn svg{width:20px;height:20px;stroke-width:1.6;}
+.nav-btn.active{color:var(--teal-light);}
+.flash{position:fixed;bottom:78px;left:50%;transform:translateX(-50%);background:var(--teal);color:#fff;padding:9px 22px;border-radius:30px;font-size:.83rem;font-weight:500;z-index:999;pointer-events:none;display:none;}
+</style>
+</head>
+<body>
+<div id="loading"><div class="load-logo">ZenFlo</div></div>
+<div id="flash-msg" class="flash"></div>
+
+<!-- AUTH -->
+<div id="auth-screen" style="display:none;flex-direction:column;">
+<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+<div class="auth-box">
+  <div class="auth-logo">ZenFlo</div>
+  <div class="auth-sub">Your ADHD workplace companion</div>
+  <div class="auth-tabs">
+    <button class="auth-tab active" onclick="switchAuth('login')">Sign In</button>
+    <button class="auth-tab" onclick="switchAuth('register')">Create Account</button>
+  </div>
+  <div id="login-form">
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="login-pw" placeholder="Your password" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn-primary" onclick="doLogin()">Sign In</button>
+  </div>
+  <div id="reg-form" style="display:none;">
+    <div class="field"><label>Your Name</label><input type="text" id="reg-name" placeholder="First name" autocomplete="given-name"></div>
+    <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="reg-pw" placeholder="At least 6 characters" autocomplete="new-password"
+      onkeydown="if(event.key==='Enter')doRegister()"></div>
+    <button class="btn-primary" onclick="doRegister()">Start Free — 14 Days Pro</button>
+  </div>
+  <div class="auth-msg" id="auth-msg"></div>
+</div></div></div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;">
+  <div class="top-bar">
+    <div class="top-logo">ZenFlo</div>
+    <div class="top-right">
+      <span id="top-badge"></span>
+      <span id="top-name" style="font-size:.83rem;color:var(--muted);"></span>
+      <button class="btn-logout" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- BRAIN DUMP -->
+    <div class="panel active" id="panel-dump">
+      <div class="panel-title">Brain Dump</div>
+      <div class="panel-sub">Get everything out of your head. No order, no pressure.</div>
+      <div class="card">
+        <div class="card-label">What's rattling around?</div>
+        <textarea class="brain-textarea" id="dump-input" placeholder="Just type... anything. Tasks, worries, ideas. All of it."></textarea>
+        <div class="row-btns">
+          <button class="btn-teal" onclick="saveDump()">Save &amp; Clear</button>
+          <button class="btn-outline" onclick="document.getElementById('dump-input').value=''">Clear</button>
+        </div>
+      </div>
+      <div id="dumps-list"></div>
+    </div>
+
+    <!-- TASK BREAKDOWN -->
+    <div class="panel" id="panel-tasks">
+      <div class="panel-title">Task Breakdown</div>
+      <div class="panel-sub">Break big tasks into tiny, doable steps.</div>
+      <div class="card">
+        <div class="card-label">New Task</div>
+        <div class="task-form">
+          <input class="task-input" id="task-title" placeholder="What's the task?">
+          <div id="steps-container" class="steps-list"></div>
+          <button class="add-step" onclick="addStepField()">+ Add a step</button>
+          <button class="btn-teal" onclick="saveTask()" style="align-self:flex-start;padding:9px 20px;">Add Task</button>
+        </div>
+      </div>
+      <div id="tasks-list"></div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <div class="panel" id="panel-scripts">
+      <div class="panel-title">Workplace Scripts</div>
+      <div class="panel-sub">Ready-made words for the moments that trip you up.</div>
+      <input class="script-search" id="script-search" placeholder="Search scripts..." oninput="renderScriptList()">
+      <div class="script-cats" id="script-cats"></div>
+      <div id="scripts-list"></div>
+    </div>
+
+    <!-- FOCUS TIMER -->
+    <div class="panel" id="panel-timer">
+      <div class="panel-title">Focus Timer</div>
+      <div class="panel-sub">Work in bursts. Rest before you burn out.</div>
+      <div class="timer-wrap">
+        <div class="timer-ring">
+          <svg width="180" height="180" viewBox="0 0 180 180">
+            <circle class="ring-bg" cx="90" cy="90" r="80"/>
+            <circle class="ring-prog" id="timer-ring" cx="90" cy="90" r="80" stroke-dasharray="502.65" stroke-dashoffset="0"/>
+          </svg>
+          <div class="ring-text"><div class="timer-display" id="timer-display">25:00</div></div>
+        </div>
+        <div class="timer-label" id="timer-label">Choose your focus time</div>
+        <div class="timer-presets">
+          <button class="preset-btn" data-mins="5" onclick="setPreset(5,this)">5 min</button>
+          <button class="preset-btn" data-mins="10" onclick="setPreset(10,this)">10 min</button>
+          <button class="preset-btn" data-mins="15" onclick="setPreset(15,this)">15 min</button>
+          <button class="preset-btn active" data-mins="25" onclick="setPreset(25,this)">25 min</button>
+          <button class="preset-btn" data-mins="45" onclick="setPreset(45,this)">45 min</button>
+        </div>
+        <div class="timer-controls">
+          <button class="timer-btn timer-start" id="timer-start-btn" onclick="toggleTimer()">Start</button>
+          <button class="timer-btn timer-reset" onclick="resetTimer()">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHECK-IN -->
+    <div class="panel" id="panel-checkin">
+      <div class="panel-title">Daily Check-In</div>
+      <div class="panel-sub">A quick pulse check before your day begins.</div>
+      <div id="checkin-form-wrap">
+        <div class="card">
+          <div class="card-label">How are you feeling?</div>
+          <div class="checkin-row">
+            <button class="mood-btn" onclick="selectMood('😤',this)" data-mood="😤"><span style="font-size:1.3rem;">😤</span><span class="mood-lbl">Stressed</span></button>
+            <button class="mood-btn" onclick="selectMood('😕',this)" data-mood="😕"><span style="font-size:1.3rem;">😕</span><span class="mood-lbl">Meh</span></button>
+            <button class="mood-btn" onclick="selectMood('😐',this)" data-mood="😐"><span style="font-size:1.3rem;">😐</span><span class="mood-lbl">Okay</span></button>
+            <button class="mood-btn" onclick="selectMood('🙂',this)" data-mood="🙂"><span style="font-size:1.3rem;">🙂</span><span class="mood-lbl">Good</span></button>
+            <button class="mood-btn" onclick="selectMood('😊',this)" data-mood="😊"><span style="font-size:1.3rem;">😊</span><span class="mood-lbl">Great</span></button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Energy level?</div>
+          <div class="energy-bar">
+            <button class="energy-dot e1" title="Very low" onclick="selectEnergy(1,this)" data-e="1"></button>
+            <button class="energy-dot e2" title="Low" onclick="selectEnergy(2,this)" data-e="2"></button>
+            <button class="energy-dot e3" title="Medium" onclick="selectEnergy(3,this)" data-e="3"></button>
+            <button class="energy-dot e4" title="High" onclick="selectEnergy(4,this)" data-e="4"></button>
+            <button class="energy-dot e5" title="Very high" onclick="selectEnergy(5,this)" data-e="5"></button>
+          </div>
+          <div style="font-size:.73rem;color:var(--muted);margin-top:7px;" id="energy-label">Tap a dot</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Anything on your mind? (optional)</div>
+          <textarea class="checkin-note" id="checkin-note" placeholder="A quick note to yourself..."></textarea>
+          <button class="btn-teal" onclick="saveCheckin()">Save Check-In</button>
+        </div>
+      </div>
+      <div id="checkin-done-wrap" style="display:none;">
+        <div class="checkin-done">
+          <div class="checkin-done-emoji">✅</div>
+          <div class="checkin-done-text">Check-in saved. You're doing great.</div>
+          <div id="checkin-summary" style="font-size:.81rem;color:var(--muted);margin-top:7px;"></div>
+          <button class="btn-outline" style="margin-top:16px;" onclick="resetCheckin()">Check in again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- WIND DOWN -->
+    <div class="panel" id="panel-winddown">
+      <div class="panel-title">Wind Down</div>
+      <div class="panel-sub">End your day with intention. Tick each step when you're ready.</div>
+      <div class="winddown-steps" id="winddown-steps"></div>
+    </div>
+
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" onclick="showPanel('dump',this)" title="Brain Dump">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M5 8h14M5 5h14a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z"/></svg>
+      Dump
+    </button>
+    <button class="nav-btn" onclick="showPanel('tasks',this)" title="Tasks">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+      Tasks
+    </button>
+    <button class="nav-btn" onclick="showPanel('scripts',this)" title="Scripts">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+      Scripts
+    </button>
+    <button class="nav-btn" onclick="showPanel('timer',this)" title="Focus Timer">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="13" r="7" stroke-linecap="round"/><path stroke-linecap="round" d="M12 10v3l2 2M12 6V4M10 4h4"/></svg>
+      Timer
+    </button>
+    <button class="nav-btn" onclick="showPanel('checkin',this)" title="Check-In">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+      Check-In
+    </button>
+    <button class="nav-btn" onclick="showPanel('winddown',this)" title="Wind Down">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      Wind Down
+    </button>
+  </nav>
+</div>
+
+<script>
+const SCRIPTS=[{cat:'Deadlines',icon:'⏰',name:'I need more time on this',text:'Hi [Name],\n\nI want to make sure I deliver this properly. I\'m currently working through [task/reason] and I\'d like to ask if we could extend the deadline to [new date].\n\nI\'ll keep you updated on progress. Thanks for your understanding.'},{cat:'Deadlines',icon:'⏰',name:'Explaining a missed deadline',text:'Hi [Name],\n\nI owe you an apology — I didn\'t hit the deadline for [task]. I underestimated how long [reason] would take. It\'s now at [stage] and I\'ll have it done by [new date].\n\nI\'ll be more realistic with my estimates going forward.'},{cat:'Deadlines',icon:'⏰',name:'Asking what the real priority is',text:'Hi [Name],\n\nI currently have [Task A] and [Task B] both due soon. Could you help me understand which one takes priority? I want to make sure I\'m focusing on the right thing first.'},{cat:'Meetings',icon:'🗓️',name:'Asking for agenda in advance',text:'Hi [Name],\n\nCould you send over the agenda for [meeting name] before we meet? It really helps me prepare and contribute properly.\n\nThanks in advance.'},{cat:'Meetings',icon:'🗓️',name:'I need to leave a meeting early',text:'Just a heads-up — I\'ll need to leave at [time] today as I have another commitment. I\'ll make sure I\'m across the key points before then.'},{cat:'Meetings',icon:'🗓️',name:'I zoned out and missed something',text:'Sorry — I want to make sure I\'ve got this right. Could you quickly repeat [the last point / my action]? I want to be certain I have it correctly.'},{cat:'Meetings',icon:'🗓️',name:'Proposing a shorter meeting',text:'Hi [Name],\n\nI think we could cover what we need in [15/30] minutes. Would it be okay to keep this one short and focused? I\'ll send some notes beforehand so we can hit the ground running.'},{cat:'Emails',icon:'✉️',name:'Apologising for a late reply',text:'Hi [Name],\n\nApologies for the delay — this fell through the gaps. I\'ve had a chance to look into it now and here\'s where things stand:\n\n[your response]'},{cat:'Emails',icon:'✉️',name:'Following up without being annoying',text:'Hi [Name],\n\nJust a gentle nudge on [topic] — I want to make sure this doesn\'t get lost. Let me know if you need anything from me to move it forward.'},{cat:'Emails',icon:'✉️',name:'Saying I don\'t understand',text:'Hi [Name],\n\nThanks for sending this over. I want to make sure I understand it correctly — could you clarify [specific point]? I\'d rather ask than get it wrong.'},{cat:'Emails',icon:'✉️',name:'Asking for written instructions',text:'Thanks for explaining that. Would you be able to send a quick written version? I find it really useful to have something to refer back to as I work through it.'},{cat:'Boundaries',icon:'🛑',name:'I can\'t take this on right now',text:'I really appreciate you thinking of me for this. Right now my plate is full with [current commitments] and I wouldn\'t be able to give it the attention it deserves.\n\nCould we revisit this in [timeframe], or is there someone else who might be free?'},{cat:'Boundaries',icon:'🛑',name:'I need to protect my focus time',text:'I\'ve blocked out [time] for focused work today. Could we catch up at [alternative time] instead? I\'ll be in a much better headspace to help you properly.'},{cat:'Boundaries',icon:'🛑',name:'Saying no to an extra task',text:'Thanks for the ask — I want to be honest that I\'m at capacity right now. If this is urgent, it might need to go to someone else, or we\'d need to agree what I drop to take it on.'},{cat:'Support',icon:'🤝',name:'Asking for clearer instructions',text:'I want to make sure I get this right. Could you give me a bit more detail on [specific part]? A step-by-step or example would really help me get started.'},{cat:'Support',icon:'🤝',name:'Telling my manager I\'m struggling',text:'I want to be upfront — I\'ve been finding [task/situation] harder than expected. I don\'t want to let things slip without flagging it. Could we find a few minutes to talk through it?'},{cat:'Support',icon:'🤝',name:'Asking for a reasonable adjustment',text:'I\'ve found that [adjustment] helps me do my best work. Would it be possible to put this in place? I\'m happy to explain why it makes a difference for me.'},{cat:'Support',icon:'🤝',name:'Disclosing ADHD to a manager',text:'I wanted to have a quiet word about something. I have ADHD, which can affect how I organise tasks and manage time. I\'m not using it as an excuse — I\'m telling you because I\'d like to work with you on some small adjustments that would help me perform at my best.'},{cat:'Conflict',icon:'⚡',name:'Responding when accused unfairly',text:'I hear what you\'re saying and I want to address it properly. From my side, [your perspective]. I think it would help to talk this through — can we find time to do that?'},{cat:'Conflict',icon:'⚡',name:'When someone keeps interrupting you',text:'I\'d really appreciate being able to finish my point before we discuss it. It helps me think more clearly when I can get it out in full.'},{cat:'Conflict',icon:'⚡',name:'Disagreeing professionally',text:'I see it differently. My concern is [specific point]. I\'m not saying your approach is wrong — I just want to make sure we\'ve considered [alternative]. Can we talk it through?'},{cat:'Everyday',icon:'💬',name:'I forgot what you asked',text:'Sorry — could you remind me of that? I want to make sure I\'ve got it right.'},{cat:'Everyday',icon:'💬',name:'Buying myself time to think',text:'That\'s a good question — let me think about that properly and come back to you. Can I get back to you by [end of day / tomorrow]?'},{cat:'Everyday',icon:'💬',name:'When I\'m having a hard ADHD day',text:'I\'m having a bit of a difficult day today with focus. I\'m still on it, but I might be slower than usual. I\'ll flag if anything looks like it\'ll be affected.'},{cat:'Everyday',icon:'💬',name:'Acknowledging a mistake calmly',text:'You\'re right — I got that wrong. Here\'s what happened: [brief explanation]. Going forward I\'ll [what you\'ll do differently]. Sorry for the confusion.'}];
+const WINDDOWN=[{title:'Write down anything unfinished',body:"Get it out of your head and onto paper or your task list. Your brain can stop holding it now."},{title:'Note your one win today',body:"Even on a hard day, find one thing you did. Wrote one email? Showed up? That counts."},{title:'Close all your browser tabs',body:"Close everything open. You won't lose anything important. It'll feel better."},{title:"Set tomorrow's one priority",body:"Just one. The thing that matters most. Write it down now so your brain knows what's waiting."},{title:'Tell your body it\'s done',body:"Stand up, stretch, get a drink. Work is over. Your brain needs a physical signal that the day has ended."},{title:'No screens for 15 minutes',body:"Phone down. Let your nervous system settle. You've done enough."}];
+
+let currentUser=null,timerInterval=null,timerRunning=false,timerLeft=25*60,timerTotal=25*60,selectedMood=null,selectedEnergy=null,stepCount=0,winddownState={},activeScriptCat='All';
+
+window.addEventListener('DOMContentLoaded',async()=>{
+  renderScripts();renderWindDown();updateTimerDisplay();
+  const r=await fetch('/api/me');const d=await r.json();
+  if(d.loggedIn){currentUser=d.user;showApp();}else{showAuth();}
+  setTimeout(()=>{const l=document.getElementById('loading');l.style.opacity='0';setTimeout(()=>l.style.display='none',400);},300);
+});
+
+function showAuth(){document.getElementById('auth-screen').style.display='flex';document.getElementById('app-screen').style.display='none';}
+function showApp(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  document.getElementById('top-name').textContent=currentUser.name;
+  const b=document.getElementById('top-badge');
+  b.textContent=currentUser.isPro?'PRO':'Free Trial';
+  b.className=currentUser.isPro?'badge-pro':'badge-free';
+  loadDumps();loadTasks();loadCheckin();
+}
+function switchAuth(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(tab==='login'?0:1)===i));
+  document.getElementById('login-form').style.display=tab==='login'?'':'none';
+  document.getElementById('reg-form').style.display=tab==='register'?'':'none';
+  document.getElementById('auth-msg').textContent='';
+}
+async function doLogin(){
+  const e=document.getElementById('login-email').value.trim(),p=document.getElementById('login-pw').value;
+  if(!e||!p){setMsg('Please fill in both fields');return;}
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
+  const d=await r.json();if(d.error){setMsg(d.error);return;}currentUser=d.user;showApp();
+}
+async function doRegister(){
+  const n=document.getElementById('reg-name').value.trim(),e=document.getElementById('reg-email').value.trim(),p=document.getElementById('reg-pw').value;
+  if(!n||!e||!p){setMsg('Please fill in all fields');return;}
+  const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,email:e,password:p})});
+  const d=await r.json();if(d.error){setMsg(d.error);return;}currentUser=d.user;showApp();
+}
+async function doLogout(){await fetch('/api/logout',{method:'POST'});currentUser=null;showAuth();}
+function setMsg(m){document.getElementById('auth-msg').textContent=m;}
+
+function showPanel(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+
+async function saveDump(){
+  const c=document.getElementById('dump-input').value.trim();if(!c)return;
+  const r=await fetch('/api/braindump',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
+  const d=await r.json();if(d.success){document.getElementById('dump-input').value='';flash('Saved \u2713');loadDumps();}
+}
+async function loadDumps(){
+  const r=await fetch('/api/braindump');const d=await r.json();
+  const el=document.getElementById('dumps-list');
+  if(!d.dumps.length){el.innerHTML='<div class="no-items">Your saved dumps will appear here</div>';return;}
+  el.innerHTML=d.dumps.map(x=>`<div class="dump-item"><button class="dump-del" onclick="deleteDump(${x.id})">\u2715</button><div class="dump-text">${esc(x.content)}</div><div class="dump-date">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');
+}
+async function deleteDump(id){await fetch('/api/braindump/'+id,{method:'DELETE'});loadDumps();}
+
+function addStepField(){
+  stepCount++;const c=document.getElementById('steps-container');
+  const row=document.createElement('div');row.className='step-row';
+  row.innerHTML=`<input class="task-input step-input" style="font-size:.84rem;" placeholder="Step ${stepCount}..."><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:0 5px;">\u2715</button>`;
+  c.appendChild(row);row.querySelector('input').focus();
+}
+async function saveTask(){
+  const t=document.getElementById('task-title').value.trim();if(!t)return;
+  const steps=[...document.querySelectorAll('.step-input')].map(i=>i.value.trim()).filter(Boolean);
+  const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,steps})});
+  const d=await r.json();
+  if(d.success){document.getElementById('task-title').value='';document.getElementById('steps-container').innerHTML='';stepCount=0;flash('Task added \u2713');loadTasks();}
+}
+async function loadTasks(){
+  const r=await fetch('/api/tasks');const d=await r.json();
+  const el=document.getElementById('tasks-list');
+  if(!d.tasks.length){el.innerHTML='<div class="no-items">No tasks yet — add your first above</div>';return;}
+  el.innerHTML=d.tasks.map(t=>{
+    const steps=Array.isArray(t.steps)?t.steps:(typeof t.steps==='string'?JSON.parse(t.steps):[]);
+    return `<div class="task-item ${t.completed?'done':''}"><div class="task-header"><div class="task-check ${t.completed?'checked':''}" onclick="toggleTask(${t.id},${!t.completed})">${t.completed?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="task-title-text">${esc(t.title)}</div><button class="task-del-btn" onclick="deleteTask(${t.id})">\u2715</button></div>${steps.length?`<div class="task-steps">${steps.map(s=>`<div class="task-step">${esc(s)}</div>`).join('')}</div>`:''}</div>`;
+  }).join('');
+}
+async function toggleTask(id,comp){await fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({completed:comp})});loadTasks();}
+async function deleteTask(id){await fetch('/api/tasks/'+id,{method:'DELETE'});loadTasks();}
+
+let activeScriptIdx=null;
+function renderScripts(){
+  const cats=['All',...new Set(SCRIPTS.map(s=>s.cat))];
+  document.getElementById('script-cats').innerHTML=cats.map(c=>`<button class="cat-btn ${c==='All'?'active':''}" onclick="setCat('${c}',this)">${c}</button>`).join('');
+  renderScriptList();
+}
+function setCat(cat,btn){activeScriptCat=cat;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderScriptList();}
+function renderScriptList(){
+  const q=(document.getElementById('script-search')?.value||'').toLowerCase();
+  const list=SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
+  document.getElementById('scripts-list').innerHTML=list.length?list.map((s,i)=>`<div class="script-card"><div class="script-header" onclick="toggleScript(${i})"><div class="script-icon">${s.icon}</div><div><div class="script-name">${s.name}</div><div class="script-cat-tag">${s.cat}</div></div></div><div class="script-body" id="sb-${i}"><div class="script-text">${esc(s.text)}</div><button class="copy-btn" onclick="copyScript(${i})">📋 Copy script</button></div></div>`).join(''):'<div class="no-items">No scripts found</div>';
+}
+function toggleScript(i){document.getElementById('sb-'+i)?.classList.toggle('open');}
+function copyScript(i){
+  const q=(document.getElementById('script-search')?.value||'').toLowerCase();
+  const list=SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
+  navigator.clipboard.writeText(list[i]?.text||'').then(()=>flash('Script copied \u2713'));
+}
+
+function setPreset(mins,btn){resetTimer();timerLeft=mins*60;timerTotal=mins*60;updateTimerDisplay();document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b===btn));}
+function toggleTimer(){
+  if(timerRunning){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Resume';document.getElementById('timer-label').textContent='Paused';}
+  else{timerRunning=true;document.getElementById('timer-start-btn').textContent='Pause';document.getElementById('timer-label').textContent="Focus time — you've got this";
+    timerInterval=setInterval(()=>{timerLeft--;updateTimerDisplay();if(timerLeft<=0){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Start';document.getElementById('timer-label').textContent="\u2705 Time's up! Take a break.";}},1000);}
+}
+function resetTimer(){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Start';document.getElementById('timer-label').textContent='Choose your focus time';updateTimerDisplay();}
+function updateTimerDisplay(){
+  const m=String(Math.floor(timerLeft/60)).padStart(2,'0'),s=String(timerLeft%60).padStart(2,'0');
+  document.getElementById('timer-display').textContent=`${m}:${s}`;
+  const circ=2*Math.PI*80,pct=timerLeft/timerTotal;
+  document.getElementById('timer-ring').style.strokeDashoffset=circ*(1-pct);
+}
+
+function selectMood(mood,btn){selectedMood=mood;document.querySelectorAll('.mood-btn').forEach(b=>b.classList.toggle('selected',b===btn));}
+const elabels=['','Very low','Low','Medium','High','Very high'];
+function selectEnergy(e,btn){selectedEnergy=e;document.querySelectorAll('.energy-dot').forEach(b=>b.classList.toggle('selected',b===btn));document.getElementById('energy-label').textContent=elabels[e];}
+async function saveCheckin(){
+  const note=document.getElementById('checkin-note').value.trim();
+  const r=await fetch('/api/checkin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mood:selectedMood,energy:selectedEnergy,note})});
+  const d=await r.json();
+  if(d.success){document.getElementById('checkin-form-wrap').style.display='none';document.getElementById('checkin-done-wrap').style.display='';document.getElementById('checkin-summary').textContent=`Mood: ${selectedMood||'—'} · Energy: ${elabels[selectedEnergy]||'—'}`;}
+}
+async function loadCheckin(){
+  const r=await fetch('/api/checkin/today');const d=await r.json();
+  if(d.checkin){document.getElementById('checkin-form-wrap').style.display='none';document.getElementById('checkin-done-wrap').style.display='';document.getElementById('checkin-summary').textContent=`Mood: ${d.checkin.mood||'—'} · Energy: ${elabels[d.checkin.energy]||'—'}`;}
+}
+function resetCheckin(){selectedMood=null;selectedEnergy=null;document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));document.querySelectorAll('.energy-dot').forEach(b=>b.classList.remove('selected'));document.getElementById('checkin-note').value='';document.getElementById('energy-label').textContent='Tap a dot';document.getElementById('checkin-form-wrap').style.display='';document.getElementById('checkin-done-wrap').style.display='none';}
+
+function renderWindDown(){document.getElementById('winddown-steps').innerHTML=WINDDOWN.map((w,i)=>`<div class="wd-step"><div class="wd-num">${i+1}</div><div class="wd-content"><h4>${w.title}</h4><p>${w.body}</p><button class="wd-check-btn" id="wdbtn-${i}" onclick="toggleWD(${i})">Mark done</button></div></div>`).join('');}
+function toggleWD(i){winddownState[i]=!winddownState[i];const b=document.getElementById('wdbtn-'+i);b.classList.toggle('done',winddownState[i]);b.textContent=winddownState[i]?'\u2713 Done':'Mark done';}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+let flashT;function flash(msg){const el=document.getElementById('flash-msg');el.textContent=msg;el.style.display='block';clearTimeout(flashT);flashT=setTimeout(()=>el.style.display='none',2400);}
+</script>
+</body>
+</html>
