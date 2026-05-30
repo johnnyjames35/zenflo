@@ -1,0 +1,334 @@
+const express = require('express');
+const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
+const bcrypt = require('bcryptjs');
+const { Pool } = require('pg');
+const path = require('path');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Database
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(session({
+  store: new PgSession({ pool }),
+  secret: process.env.SESSION_SECRET || 'zenflo-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
+}));
+
+// ── DB INIT ──────────────────────────────────────────────
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS session (
+      sid varchar NOT NULL COLLATE "default",
+      sess json NOT NULL,
+      expire timestamp(6) NOT NULL,
+      CONSTRAINT session_pkey PRIMARY KEY (sid)
+    );
+    CREATE INDEX IF NOT EXISTS IDX_session_expire ON session(expire);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      plan TEXT DEFAULT 'free',
+      trial_start TIMESTAMP DEFAULT NOW(),
+      stripe_customer_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS brain_dumps (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      steps JSONB DEFAULT '[]',
+      completed BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS checkins (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      mood TEXT,
+      energy TEXT,
+      note TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  console.log('✅ Database ready');
+}
+
+// ── AUTH MIDDLEWARE ───────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
+  next();
+}
+
+function isPro(user) {
+  if (user.plan === 'pro') return true;
+  // 14-day free trial
+  const trialStart = new Date(user.trial_start);
+  const now = new Date();
+  const daysDiff = (now - trialStart) / (1000 * 60 * 60 * 24);
+  return daysDiff <= 14;
+}
+
+// ── ROUTES: AUTH ─────────────────────────────────────────
+app.post('/api/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) return res.json({ error: 'All fields required' });
+  if (password.length < 6) return res.json({ error: 'Password must be at least 6 characters' });
+
+  try {
+    const exists = await pool.query('SELECT id FROM users WHERE email=$1', [email.toLowerCase()]);
+    if (exists.rows.length) return res.json({ error: 'Email already registered' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3) RETURNING id, name, email, plan, trial_start',
+      [name.trim(), email.toLowerCase(), hash]
+    );
+    const user = result.rows[0];
+    req.session.userId = user.id;
+    req.session.userName = user.name;
+    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+  } catch (e) {
+    console.error(e);
+    res.json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase()]);
+    if (!result.rows.length) return res.json({ error: 'Email not found' });
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.json({ error: 'Incorrect password' });
+    req.session.userId = user.id;
+    req.session.userName = user.name;
+    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+  } catch (e) {
+    res.json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(() => res.json({ success: true }));
+});
+
+app.get('/api/me', async (req, res) => {
+  if (!req.session.userId) return res.json({ loggedIn: false });
+  try {
+    const result = await pool.query('SELECT id, name, email, plan, trial_start FROM users WHERE id=$1', [req.session.userId]);
+    if (!result.rows.length) return res.json({ loggedIn: false });
+    const user = result.rows[0];
+    res.json({ loggedIn: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+  } catch (e) {
+    res.json({ loggedIn: false });
+  }
+});
+
+// ── ROUTES: BRAIN DUMP ────────────────────────────────────
+app.post('/api/braindump', requireAuth, async (req, res) => {
+  const { content } = req.body;
+  if (!content || !content.trim()) return res.json({ error: 'Nothing to save' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO brain_dumps (user_id, content) VALUES ($1,$2) RETURNING *',
+      [req.session.userId, content.trim()]
+    );
+    res.json({ success: true, dump: result.rows[0] });
+  } catch (e) {
+    res.json({ error: 'Save failed' });
+  }
+});
+
+app.get('/api/braindump', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM brain_dumps WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20',
+      [req.session.userId]
+    );
+    res.json({ dumps: result.rows });
+  } catch (e) {
+    res.json({ dumps: [] });
+  }
+});
+
+app.delete('/api/braindump/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM brain_dumps WHERE id=$1 AND user_id=$2', [req.params.id, req.session.userId]);
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ error: 'Delete failed' });
+  }
+});
+
+// ── ROUTES: TASKS ─────────────────────────────────────────
+app.post('/api/tasks', requireAuth, async (req, res) => {
+  const { title, steps } = req.body;
+  if (!title) return res.json({ error: 'Task title required' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO tasks (user_id, title, steps) VALUES ($1,$2,$3) RETURNING *',
+      [req.session.userId, title.trim(), JSON.stringify(steps || [])]
+    );
+    res.json({ success: true, task: result.rows[0] });
+  } catch (e) {
+    res.json({ error: 'Save failed' });
+  }
+});
+
+app.get('/api/tasks', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM tasks WHERE user_id=$1 ORDER BY created_at DESC',
+      [req.session.userId]
+    );
+    res.json({ tasks: result.rows });
+  } catch (e) {
+    res.json({ tasks: [] });
+  }
+});
+
+app.patch('/api/tasks/:id', requireAuth, async (req, res) => {
+  const { completed } = req.body;
+  try {
+    await pool.query(
+      'UPDATE tasks SET completed=$1 WHERE id=$2 AND user_id=$3',
+      [completed, req.params.id, req.session.userId]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ error: 'Update failed' });
+  }
+});
+
+app.delete('/api/tasks/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM tasks WHERE id=$1 AND user_id=$2', [req.params.id, req.session.userId]);
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ error: 'Delete failed' });
+  }
+});
+
+// ── ROUTES: CHECK-IN ──────────────────────────────────────
+app.post('/api/checkin', requireAuth, async (req, res) => {
+  const { mood, energy, note } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO checkins (user_id, mood, energy, note) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.session.userId, mood, energy, note]
+    );
+    res.json({ success: true, checkin: result.rows[0] });
+  } catch (e) {
+    res.json({ error: 'Check-in failed' });
+  }
+});
+
+app.get('/api/checkin/today', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM checkins WHERE user_id=$1 AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 1",
+      [req.session.userId]
+    );
+    res.json({ checkin: result.rows[0] || null });
+  } catch (e) {
+    res.json({ checkin: null });
+  }
+});
+
+// ── ROUTES: STRIPE ────────────────────────────────────────
+app.post('/api/create-checkout', requireAuth, async (req, res) => {
+  try {
+    const userResult = await pool.query('SELECT * FROM users WHERE id=$1', [req.session.userId]);
+    const user = userResult.rows[0];
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{
+        price: process.env.STRIPE_PRICE_ID,
+        quantity: 1
+      }],
+      customer_email: user.email,
+      success_url: `${process.env.APP_URL || 'https://zenflo.co.uk'}/app?upgraded=true`,
+      cancel_url: `${process.env.APP_URL || 'https://zenflo.co.uk'}/app?cancelled=true`,
+      metadata: { userId: user.id }
+    });
+
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error(e);
+    res.json({ error: 'Checkout failed' });
+  }
+});
+
+app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (e) {
+    return res.status(400).send(`Webhook Error: ${e.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const userId = session.metadata.userId;
+    await pool.query("UPDATE users SET plan='pro', stripe_customer_id=$1 WHERE id=$2",
+      [session.customer, userId]);
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const customerId = event.data.object.customer;
+    await pool.query("UPDATE users SET plan='free' WHERE stripe_customer_id=$1", [customerId]);
+  }
+
+  res.json({ received: true });
+});
+
+// ── SERVE APP ─────────────────────────────────────────────
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── START ─────────────────────────────────────────────────
+initDB().then(() => {
+  app.listen(PORT, () => console.log(`🌿 ZenFlo running on port ${PORT}`));
+}).catch(e => {
+  console.error('DB init failed:', e);
+  process.exit(1);
+});
