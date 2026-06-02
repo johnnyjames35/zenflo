@@ -343,6 +343,8 @@ function showApp(){
   const b=document.getElementById('top-badge');
   b.textContent=currentUser.isPro?'PRO':'Free Trial';
   b.className=currentUser.isPro?'badge-pro':'badge-free';
+  const ub=document.getElementById('upgrade-btn');
+  if(ub)ub.style.display=currentUser.isPro?'none':'inline-block';
   loadDumps();loadTasks();loadCheckin();
 }
 function switchAuth(tab){
