@@ -4,7 +4,6 @@ const PgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const path = require('path');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -270,54 +269,17 @@ app.get('/api/checkin/today', requireAuth, async (req, res) => {
   }
 });
 
-// ── ROUTES: STRIPE ────────────────────────────────────────
-app.post('/api/create-checkout', requireAuth, async (req, res) => {
-  try {
-    const userResult = await pool.query('SELECT * FROM users WHERE id=$1', [req.session.userId]);
-    const user = userResult.rows[0];
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [{
-        price: process.env.STRIPE_PRICE_ID,
-        quantity: 1
-      }],
-      customer_email: user.email,
-      success_url: `${process.env.APP_URL || 'https://zenflo.co.uk'}/app?upgraded=true`,
-      cancel_url: `${process.env.APP_URL || 'https://zenflo.co.uk'}/app?cancelled=true`,
-      metadata: { userId: user.id }
-    });
-
-    res.json({ url: session.url });
-  } catch (e) {
-    console.error(e);
-    res.json({ error: 'Checkout failed' });
-  }
+// ── ROUTES: STRIPE PAYMENT LINKS ─────────────────────────
+app.get('/api/upgrade/monthly', requireAuth, (req, res) => {
+  const link = process.env.STRIPE_MONTHLY_LINK;
+  if (!link) return res.status(500).json({ error: 'Payment link not configured' });
+  res.redirect(link);
 });
 
-app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (e) {
-    return res.status(400).send(`Webhook Error: ${e.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const userId = session.metadata.userId;
-    await pool.query("UPDATE users SET plan='pro', stripe_customer_id=$1 WHERE id=$2",
-      [session.customer, userId]);
-  }
-
-  if (event.type === 'customer.subscription.deleted') {
-    const customerId = event.data.object.customer;
-    await pool.query("UPDATE users SET plan='free' WHERE stripe_customer_id=$1", [customerId]);
-  }
-
-  res.json({ received: true });
+app.get('/api/upgrade/annual', requireAuth, (req, res) => {
+  const link = process.env.STRIPE_ANNUAL_LINK;
+  if (!link) return res.status(500).json({ error: 'Payment link not configured' });
+  res.redirect(link);
 });
 
 // ── SERVE APP ─────────────────────────────────────────────
