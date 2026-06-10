@@ -284,6 +284,10 @@ app.get('/api/upgrade/annual', requireAuth, (req, res) => {
 
 // ── SERVE APP ─────────────────────────────────────────────
 app.get('*', (req, res) => {
+  const host = req.headers.host || '';
+  if (host === 'zenflo.co.uk' || host === 'www.zenflo.co.uk') {
+    return res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
