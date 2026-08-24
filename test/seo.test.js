@@ -33,8 +33,8 @@ test('crawler files point at the canonical homepage', () => {
 });
 
 
-test('PWA assets are wired into both public and app pages', () => {
-  assert.match(landing, /rel="manifest" href="\/manifest\.json"/);
+test('PWA assets are wired into the private app shell', () => {
+  assert.doesNotMatch(landing, /rel="manifest"/);
   assert.match(appHtml, /rel="manifest" href="\/manifest\.json"/);
   assert.match(appHtml, /serviceWorker\.register\("\/service-worker\.js"\)/);
   assert.equal(manifest.id, '/');
