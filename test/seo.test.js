@@ -7,6 +7,8 @@ const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
 const landing = read('public/landing.html');
 const appHtml = read('public/index.html');
 const server = read('server.js');
+const manifest = JSON.parse(read('public/manifest.json'));
+const worker = read('public/service-worker.js');
 
 test('public homepage exposes complete crawl metadata', () => {
   assert.match(landing, /<meta name="description"/);
@@ -28,4 +30,25 @@ test('public host routing is not intercepted by the static index file', () => {
 test('crawler files point at the canonical homepage', () => {
   assert.match(read('public/robots.txt'), /Sitemap: https:\/\/zenflo\.co\.uk\/sitemap\.xml/);
   assert.match(read('public/sitemap.xml'), /<loc>https:\/\/zenflo\.co\.uk\/<\/loc>/);
+});
+
+
+test('PWA assets are wired into both public and app pages', () => {
+  assert.match(landing, /rel="manifest" href="\/manifest\.json"/);
+  assert.match(appHtml, /rel="manifest" href="\/manifest\.json"/);
+  assert.match(appHtml, /serviceWorker\.register\("\/service-worker\.js"\)/);
+  assert.equal(manifest.id, '/');
+  assert.equal(manifest.scope, '/');
+  assert.ok(manifest.icons.some(icon => icon.src === '/icons/zenflo-icon.svg'));
+});
+
+test('service worker excludes private API traffic from caching', () => {
+  assert.match(worker, /url\.pathname\.startsWith\('\/api\/'\)/);
+  assert.match(worker, /offline\.html/);
+});
+
+test('account deletion is available in app and backend', () => {
+  assert.match(appHtml, /onclick="deleteAccount\(\)"/);
+  assert.match(server, /app\.delete\('\/api\/account'/);
+  assert.match(server, /DELETE FROM users WHERE id=\$1/);
 });
