@@ -282,6 +282,7 @@ app.delete('/api/account', requireAuth, async (req, res) => {
     if (!matches) return res.status(403).json({ error: 'Incorrect password' });
 
     await client.query('BEGIN');
+    await client.query('DELETE FROM session WHERE sid <> $1 AND sess->>\'userId\' = $2', [req.sessionID, String(req.session.userId)]);
     await client.query('DELETE FROM users WHERE id=$1', [req.session.userId]);
     await client.query('COMMIT');
     req.session.destroy(() => res.json({ success: true }));
