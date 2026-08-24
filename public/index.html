@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZenFlo App — Sign In</title>
 <meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#0b1526" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icons/zenflo-icon.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
 <style>
@@ -174,6 +177,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
       <span id="top-badge"></span>
 <a id="upgrade-btn" href="/api/upgrade/monthly" style="display:none;padding:5px 11px;background:var(--amber);color:var(--navy);font-size:.76rem;font-weight:700;border-radius:8px;text-decoration:none;">Upgrade ✨</a>
       <span id="top-name" style="font-size:.83rem;color:var(--muted);"></span>
+      <button class="btn-logout" onclick="deleteAccount()" title="Permanently delete your ZenFlo account and data">Delete account</button>
       <button class="btn-logout" onclick="doLogout()">Sign out</button>
     </div>
   </div>
@@ -469,6 +473,29 @@ function toggleWD(i){winddownState[i]=!winddownState[i];const b=document.getElem
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 let flashT;function flash(msg){const el=document.getElementById('flash-msg');el.textContent=msg;el.style.display='block';clearTimeout(flashT);flashT=setTimeout(()=>el.style.display='none',2400);}
+
+async function deleteAccount() {
+  const password = window.prompt("To permanently delete your ZenFlo account and all saved data, enter your password:");
+  if (!password) return;
+  if (!window.confirm("This cannot be undone. Delete your account and all ZenFlo data permanently?")) return;
+  try {
+    const response = await fetch("/api/account", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) return flash(result.error || "Account deletion failed");
+    window.alert("Your ZenFlo account and associated data have been deleted.");
+    window.location.reload();
+  } catch (error) {
+    flash("Account deletion failed. Please try again.");
+  }
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));
+}
 </script>
 </body>
 </html>
