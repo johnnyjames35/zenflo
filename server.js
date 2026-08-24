@@ -269,6 +269,31 @@ app.get('/api/checkin/today', requireAuth, async (req, res) => {
   }
 });
 
+// ── ROUTES: ACCOUNT DELETION ──────────────────────────────
+app.delete('/api/account', requireAuth, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password is required' });
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT password_hash FROM users WHERE id=$1', [req.session.userId]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Account not found' });
+    const matches = await bcrypt.compare(password, result.rows[0].password_hash);
+    if (!matches) return res.status(403).json({ error: 'Incorrect password' });
+
+    await client.query('BEGIN');
+    await client.query('DELETE FROM users WHERE id=$1', [req.session.userId]);
+    await client.query('COMMIT');
+    req.session.destroy(() => res.json({ success: true }));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Account deletion failed', error);
+    res.status(500).json({ error: 'Account deletion failed' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── ROUTES: STRIPE PAYMENT LINKS ─────────────────────────
 app.get('/api/upgrade/monthly', requireAuth, (req, res) => {
   const link = process.env.STRIPE_MONTHLY_LINK;
