@@ -3,6 +3,7 @@ const session = require('express-session');
 const PgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+const Stripe = require('stripe');
 const path = require('path');
 
 const app = express();
@@ -13,6 +14,44 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const ZENFLO_PRICE_IDS = new Set([
+  process.env.STRIPE_MONTHLY_PRICE_ID || 'price_1TdxK88466uzy1MNVTecsyxl',
+  process.env.STRIPE_ANNUAL_PRICE_ID || 'price_1TdxLY8466uzy1MN6xG5jDuj'
+]);
+
+async function reconcileZenfloPayment(user) {
+  if (!stripe || !user || user.plan === 'pro') return user;
+
+  const sessions = await stripe.checkout.sessions.list({
+    limit: 100,
+    expand: ['data.line_items']
+  });
+
+  const email = String(user.email || '').trim().toLowerCase();
+  const paidSession = sessions.data.find((session) => {
+    if (session.status !== 'complete' || session.payment_status !== 'paid') return false;
+    const checkoutEmail = String(
+      session.customer_details?.email || session.customer_email || ''
+    ).trim().toLowerCase();
+    if (!checkoutEmail || checkoutEmail !== email) return false;
+    return (session.line_items?.data || []).some((item) =>
+      ZENFLO_PRICE_IDS.has(item.price?.id)
+    );
+  });
+
+  if (!paidSession) return user;
+
+  const result = await pool.query(
+    'UPDATE users SET plan=$1, stripe_customer_id=$2 WHERE id=$3 RETURNING *',
+    ['pro', paidSession.customer || null, user.id]
+  );
+  return result.rows[0] || { ...user, plan: 'pro' };
+}
 
 // Middleware
 app.use(express.json());
@@ -131,11 +170,16 @@ app.post('/api/login', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase()]);
     if (!result.rows.length) return res.json({ error: 'Email not found' });
-    const user = result.rows[0];
+    let user = result.rows[0];
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.json({ error: 'Incorrect password' });
     req.session.userId = user.id;
     req.session.userName = user.name;
+    try {
+      user = await reconcileZenfloPayment(user);
+    } catch (error) {
+      console.error('Stripe payment reconciliation failed', error.message);
+    }
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
   } catch (e) {
     res.json({ error: 'Login failed' });
@@ -151,7 +195,12 @@ app.get('/api/me', async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, email, plan, trial_start FROM users WHERE id=$1', [req.session.userId]);
     if (!result.rows.length) return res.json({ loggedIn: false });
-    const user = result.rows[0];
+    let user = result.rows[0];
+    try {
+      user = await reconcileZenfloPayment(user);
+    } catch (error) {
+      console.error('Stripe payment reconciliation failed', error.message);
+    }
     res.json({ loggedIn: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
   } catch (e) {
     res.json({ loggedIn: false });
@@ -292,6 +341,19 @@ app.delete('/api/account', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Account deletion failed' });
   } finally {
     client.release();
+  }
+});
+
+// ── PAYMENT LINK RECONCILIATION ───────────────────────────
+app.post('/api/reconcile-payment', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE id=$1', [req.session.userId]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Account not found' });
+    const user = await reconcileZenfloPayment(result.rows[0]);
+    res.json({ success: true, plan: user.plan, isPro: isPro(user) });
+  } catch (error) {
+    console.error('Stripe payment reconciliation failed', error.message);
+    res.status(503).json({ error: 'Unable to verify payment right now' });
   }
 });
 
