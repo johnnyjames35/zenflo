@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ZenFlo Admin</title>
+<style>
+  body { background:#0c1420; color:#e5ecf3; font-family:'DM Sans',Arial,sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+  .box { background:#16202f; padding:40px; border-radius:12px; width:320px; text-align:center; }
+  h1 { color:#4fd1a5; margin-bottom:24px; }
+  input { width:100%; padding:12px; margin-bottom:16px; border-radius:6px; border:1px solid #2a3a4f; background:#0c1420; color:#e5ecf3; box-sizing:border-box; }
+  button { width:100%; padding:12px; border-radius:6px; border:none; background:#4fd1a5; color:#0c1420; font-weight:bold; cursor:pointer; }
+  .error { color:#ff6b6b; margin-top:12px; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>ZenFlo Admin</h1>
+    <input type="password" id="password" placeholder="Admin password">
+    <button onclick="login()">Sign In</button>
+    <div class="error" id="error"></div>
+  </div>
+  <script>
+    async function login() {
+      const password = document.getElementById('password').value;
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = '/admin/dashboard';
+      } else {
+        document.getElementById('error').textContent = 'Incorrect password';
+      }
+    }
+    document.getElementById('password').addEventListener('keypress', e => {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>
