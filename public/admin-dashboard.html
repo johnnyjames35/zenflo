@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ZenFlo Admin Dashboard</title>
+<style>
+  body { background:#0c1420; color:#e5ecf3; font-family:'DM Sans',Arial,sans-serif; margin:0; padding:24px; }
+  h1 { color:#4fd1a5; }
+  .cards { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .card { background:#16202f; padding:20px; border-radius:10px; min-width:160px; }
+  .card .num { font-size:28px; font-weight:bold; color:#4fd1a5; }
+  .card .label { font-size:13px; color:#8aa; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; background:#16202f; border-radius:10px; overflow:hidden; }
+  th, td { padding:10px 14px; text-align:left; border-bottom:1px solid #2a3a4f; font-size:14px; }
+  th { color:#8aa; text-transform:uppercase; font-size:12px; }
+  .yes { color:#4fd1a5; }
+  .no { color:#ff6b6b; }
+</style>
+</head>
+<body>
+  <h1>ZenFlo Admin</h1>
+  <div class="cards" id="cards"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th><th>Email</th><th>Plan</th><th>Days since signup</th>
+        <th>Brain dumps</th><th>Tasks</th><th>Check-ins</th><th>Used app?</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+    async function load() {
+      const res = await fetch('/admin/data');
+      if (res.status === 401) return window.location.href = '/admin/login';
+      const data = await res.json();
+      const cardsDiv = document.getElementById('cards');
+      cardsDiv.innerHTML = `
+        <div class="card"><div class="num">${data.totals.total}</div><div class="label">Total signups</div></div>
+        <div class="card"><div class="num">${data.totals.free}</div><div class="label">Free plan</div></div>
+        <div class="card"><div class="num">${data.totals.pro}</div><div class="label">Pro plan</div></div>
+        <div class="card"><div class="num">${data.totals.active}</div><div class="label">Actually used the app</div></div>
+      `;
+      const rowsBody = document.getElementById('rows');
+      rowsBody.innerHTML = data.users.map(u => {
+        const used = (u.brain_dump_count > 0 || u.task_count > 0 || u.checkin_count > 0);
+        const days = Math.floor((Date.now() - new Date(u.created_at)) / 86400000);
+        return `<tr>
+          <td>${u.name}</td>
+          <td>${u.email}</td>
+          <td>${u.plan}</td>
+          <td>${days}</td>
+          <td>${u.brain_dump_count}</td>
+          <td>${u.task_count}</td>
+          <td>${u.checkin_count}</td>
+          <td class="${used ? 'yes' : 'no'}">${used ? 'Yes' : 'No'}</td>
+        </tr>`;
+      }).join('');
+    }
+    load();
+  </script>
+</body>
+</html>
