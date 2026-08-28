@@ -27,6 +27,60 @@ app.use(session({
   cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
 
+// ── ADMIN AUTH ─────────────────────────────────────────────
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'callback-admin-2024';
+
+function requireAdmin(req, res, next) {
+  if (!req.session.isAdmin) return res.status(401).json({ error: 'Not authorized' });
+  next();
+}
+
+app.get('/admin/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-login.html'));
+});
+
+app.post('/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    req.session.isAdmin = true;
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Invalid password.' });
+  }
+});
+
+app.get('/admin/logout', (req, res) => {
+  req.session.isAdmin = false;
+  res.redirect('/admin/login');
+});
+
+app.get('/admin/dashboard', (req, res) => {
+  if (!req.session.isAdmin) return res.redirect('/admin/login');
+  res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
+});
+
+app.get('/admin/data', requireAdmin, async (req, res) => {
+  try {
+    const usersResult = await pool.query(`
+      SELECT u.id, u.name, u.email, u.plan, u.trial_start, u.created_at,
+        (SELECT COUNT(*) FROM brain_dumps b WHERE b.user_id = u.id) as brain_dump_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.user_id = u.id) as task_count,
+        (SELECT COUNT(*) FROM checkins c WHERE c.user_id = u.id) as checkin_count
+      FROM users u
+      ORDER BY u.created_at DESC
+    `);
+    const users = usersResult.rows;
+    const total = users.length;
+    const free = users.filter(u => u.plan === 'free').length;
+    const pro = users.filter(u => u.plan === 'pro').length;
+    const active = users.filter(u => u.brain_dump_count > 0 || u.task_count > 0 || u.checkin_count > 0).length;
+    res.json({ users, totals: { total, free, pro, active } });
+  } catch (e) {
+    console.error('Admin data error:', e);
+    res.status(500).json({ error: 'Failed to load admin data' });
+  }
+});
+
 // ── DB INIT ──────────────────────────────────────────────
 async function initDB() {
   await pool.query(`
