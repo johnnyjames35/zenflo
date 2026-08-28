@@ -361,6 +361,36 @@ app.get('/api/upgrade/annual', requireAuth, (req, res) => {
   if (!link) return res.status(500).json({ error: 'Payment link not configured' });
   res.redirect(link);
 });
+// ── FOUNDER ACCESS (personal bookmark login) ──────────────
+app.get('/founder-access', async (req, res) => {
+  const key = req.query.key;
+  if (!key || key !== process.env.FOUNDER_ACCESS_KEY) {
+    return res.status(401).send('Not authorized');
+  }
+  try {
+    const existing = await pool.query('SELECT id, name FROM users WHERE email=$1', ['founder@zenflo.co.uk']);
+    let userId, userName;
+    if (existing.rows.length) {
+      userId = existing.rows[0].id;
+      userName = existing.rows[0].name;
+    } else {
+      const randomPassword = require('crypto').randomBytes(16).toString('hex');
+      const hash = await bcrypt.hash(randomPassword, 10);
+      const result = await pool.query(
+        `INSERT INTO users (name, email, password_hash, plan) VALUES ($1,$2,$3,$4) RETURNING id, name`,
+        ['John', 'founder@zenflo.co.uk', hash, 'pro']
+      );
+      userId = result.rows[0].id;
+      userName = result.rows[0].name;
+    }
+    req.session.userId = userId;
+    req.session.userName = userName;
+    res.redirect('/');
+  } catch (e) {
+    console.error('Founder access error:', e);
+    res.status(500).send('Something went wrong');
+  }
+});
 
 // ── SERVE APP ─────────────────────────────────────────────
 app.get('*', (req, res) => {
