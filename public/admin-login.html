@@ -10,6 +10,9 @@
   input { width:100%; padding:12px; margin-bottom:16px; border-radius:6px; border:1px solid #2a3a4f; background:#0c1420; color:#e5ecf3; box-sizing:border-box; }
   button { width:100%; padding:12px; border-radius:6px; border:none; background:#4fd1a5; color:#0c1420; font-weight:bold; cursor:pointer; }
   .error { color:#ff6b6b; margin-top:12px; }
+  .link { display:block; margin-top:16px; color:#8aa; font-size:13px; cursor:pointer; text-decoration:underline; }
+  .recover-box { display:none; margin-top:20px; padding-top:20px; border-top:1px solid #2a3a4f; }
+  .password-reveal { color:#4fd1a5; font-weight:bold; margin-top:12px; word-break:break-all; }
 </style>
 </head>
 <body>
@@ -18,6 +21,14 @@
     <input type="password" id="password" placeholder="Admin password">
     <button onclick="login()">Sign In</button>
     <div class="error" id="error"></div>
+    <span class="link" onclick="toggleRecover()">Forgot password?</span>
+
+    <div class="recover-box" id="recoverBox">
+      <input type="password" id="recoveryKey" placeholder="Recovery key">
+      <button onclick="recover()">Reveal Password</button>
+      <div class="error" id="recoverError"></div>
+      <div class="password-reveal" id="passwordReveal"></div>
+    </div>
   </div>
   <script>
     async function login() {
@@ -37,6 +48,28 @@
     document.getElementById('password').addEventListener('keypress', e => {
       if (e.key === 'Enter') login();
     });
+
+    function toggleRecover() {
+      const box = document.getElementById('recoverBox');
+      box.style.display = box.style.display === 'block' ? 'none' : 'block';
+    }
+
+    async function recover() {
+      const recoveryKey = document.getElementById('recoveryKey').value;
+      const res = await fetch('/admin/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recoveryKey })
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('recoverError').textContent = '';
+        document.getElementById('passwordReveal').textContent = 'Your admin password: ' + data.password;
+      } else {
+        document.getElementById('passwordReveal').textContent = '';
+        document.getElementById('recoverError').textContent = 'Invalid recovery key';
+      }
+    }
   </script>
 </body>
 </html>
