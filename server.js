@@ -80,6 +80,24 @@ app.get('/admin/data', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to load admin data' });
   }
 });
+app.post('/admin/recover', (req, res) => {
+  const { recoveryKey } = req.body;
+  if (recoveryKey && recoveryKey === process.env.ADMIN_RECOVERY_KEY) {
+    res.json({ success: true, password: ADMIN_PASSWORD });
+  } else {
+    res.status(401).json({ error: 'Invalid recovery key' });
+  }
+});
+
+app.delete('/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Admin delete user error:', e);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
 
 // ── DB INIT ──────────────────────────────────────────────
 async function initDB() {
