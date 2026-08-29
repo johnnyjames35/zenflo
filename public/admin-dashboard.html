@@ -15,6 +15,8 @@
   th { color:#8aa; text-transform:uppercase; font-size:12px; }
   .yes { color:#4fd1a5; }
   .no { color:#ff6b6b; }
+  .delete-btn { background:#ff6b6b; color:#0c1420; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px; }
+  .delete-btn:hover { background:#ff4d4d; }
 </style>
 </head>
 <body>
@@ -24,7 +26,7 @@
     <thead>
       <tr>
         <th>Name</th><th>Email</th><th>Plan</th><th>Days since signup</th>
-        <th>Brain dumps</th><th>Tasks</th><th>Check-ins</th><th>Used app?</th>
+        <th>Brain dumps</th><th>Tasks</th><th>Check-ins</th><th>Used app?</th><th></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -54,9 +56,22 @@
           <td>${u.task_count}</td>
           <td>${u.checkin_count}</td>
           <td class="${used ? 'yes' : 'no'}">${used ? 'Yes' : 'No'}</td>
+          <td><button class="delete-btn" onclick="deleteUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Delete</button></td>
         </tr>`;
       }).join('');
     }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`Are you sure you want to delete ${name}'s account? This cannot be undone.`)) return;
+      const res = await fetch(`/admin/users/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        load();
+      } else {
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
+      }
+    }
+
     load();
   </script>
 </body>
