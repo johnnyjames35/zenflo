@@ -1,8 +1,8 @@
 [{
-    "relation": ["delegate_permission/common.handle_all_urls"],
-    "target": {
-          "namespace": "android_app",
-          "package_name": "uk.co.zenflo.app.twa",
-          "sha256_cert_fingerprints": ["D4:D1:1E:28:D5:FF:08:A0:EE:15:98:57:6E:FE:A2:AD:D9:80:2A:B8:8D:D7:AA:85:45:DA:80:49:3B:5C:5D:49"]
-    }
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+              "namespace": "android_app",
+              "package_name": "uk.co.zenflo.twa",
+              "sha256_cert_fingerprints": ["B5:30:94:51:9F:07:22:9B:FF:A7:C0:F2:32:E6:1D:F6:60:24:5A:54:8D:24:50:DE:59:AF:6C:E6:15:10:D4:DB"]
+      }
 }]
