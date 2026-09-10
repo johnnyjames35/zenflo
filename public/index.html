@@ -191,7 +191,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
     <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="field"><label>Password</label><input type="password" id="reg-pw" placeholder="At least 6 characters" autocomplete="new-password"
       onkeydown="if(event.key==='Enter')doRegister()"></div>
-    <button class="btn-primary" onclick="doRegister(); gtag_report_conversion();">Start Free — 14 Days Pro</button>
+    <button class="btn-primary" onclick="doRegister();">Start Free — 14 Days Pro</button>
     <p style="font-size:0.75rem;color:rgba(244,247,245,0.6);text-align:center;margin-top:10px;">By signing up you agree to our <a href="terms.html" style="color:#4DC4A0;">Terms of Service</a> and <a href="privacy-policy.html" style="color:#4DC4A0;">Privacy Policy</a>.</p>
   </div>
   <div class="auth-msg" id="auth-msg"></div>
@@ -398,7 +398,7 @@ async function doRegister(){
   const n=document.getElementById('reg-name').value.trim(),e=document.getElementById('reg-email').value.trim(),p=document.getElementById('reg-pw').value;
   if(!n||!e||!p){setMsg('Please fill in all fields');return;}
   const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,email:e,password:p})});
-  const d=await r.json();if(d.error){setMsg(d.error);return;}currentUser=d.user;showApp();
+  const d=await r.json();if(d.error){setMsg(d.error);return;}currentUser=d.user;showApp();gtag_report_conversion();
 }
 async function doLogout(){await fetch('/api/logout',{method:'POST'});currentUser=null;showAuth();}
 function setMsg(m){document.getElementById('auth-msg').textContent=m;}
