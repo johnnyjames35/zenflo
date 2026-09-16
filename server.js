@@ -379,6 +379,131 @@ app.get('/api/upgrade/annual', requireAuth, (req, res) => {
   if (!link) return res.status(500).json({ error: 'Payment link not configured' });
   res.redirect(link);
 });
+
+// ── ROUTES: AI CHAT WIDGET ────────────────────────────────
+// Public-facing support bot for zenflo.co.uk and app.zenflo.co.uk.
+// Answers using only the ZENFLO_KNOWLEDGE text below — kept deliberately
+// narrow so it can't invent claims about the app. Costs pay-per-use
+// (Anthropic API), no monthly subscription.
+
+const ZENFLO_KNOWLEDGE = `
+ABOUT ZENFLO
+ZenFlo is a web-based ADHD workplace app (app.zenflo.co.uk) built by Cambrian Digital / Big Bulldog UK Ltd.
+It is a productivity and structure tool — it does not diagnose, treat or manage ADHD as a medical condition,
+and should never be described as doing so.
+
+PRICING
+- Free plan (£0): brain dump, 3 tasks/day, 10 workplace scripts, focus timer, daily check-in.
+- Pro plan: £9.99/month or £99/year, includes a 14-day free trial, no card required to start.
+  Pro unlocks unlimited tasks, 25+ workplace scripts, and the wind-down tool.
+- Sign up at https://app.zenflo.co.uk
+
+THE SIX CORE FEATURES
+1. Brain Dump — type or paste everything on your mind, in any order. ZenFlo automatically sorts it into
+   tasks, worries and ideas. Best used first thing in the morning or whenever your head feels too full.
+2. Break It Down — splits any task into small, timed steps, with a "Start here, right now" prompt so you
+   always know the very next action. Best for tasks that feel too big to start.
+3. Workplace Scripts — 40+ ready-made scripts for emails, meetings, deadline extensions and tricky
+   conversations, for when the right words won't come. Free plan includes 10, Pro unlocks 25+.
+4. Focus Timer — structured focus sessions in manageable bursts with built-in rest, designed for the
+   ADHD brain, so tasks actually get finished.
+5. Daily Check-in — log mood and energy at the start of the day; ZenFlo adapts the day's plan around how
+   the user actually feels rather than a fixed plan.
+6. Wind Down (Pro) — an end-of-day routine to note what got done, park unfinished items for tomorrow, and
+   close the day without a guilt spiral.
+
+SUPPORT
+For anything the bot can't answer, or to request account/data deletion, contact hello@zenflo.co.uk.
+Full guide: https://zenflo.co.uk/how-to-use.html — ADHD articles: https://zenflo.co.uk/knowledge-centre.html
+`;
+
+// Scoped CORS - only for the chat endpoint, so the rest of the app's
+// session-cookie-protected routes are completely unaffected.
+const CHAT_ALLOWED_ORIGINS = [
+  'https://zenflo.co.uk',
+  'https://www.zenflo.co.uk',
+  'https://app.zenflo.co.uk'
+];
+
+function chatCors(req, res, next) {
+  const origin = req.headers.origin;
+  if (origin && CHAT_ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+}
+
+// Very simple in-memory rate limit: 20 messages per IP per hour.
+// Resets on redeploy - fine for a v1 at ZenFlo's current traffic level.
+const chatRateLimit = new Map();
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const hour = 60 * 60 * 1000;
+  const entry = chatRateLimit.get(ip) || { count: 0, resetAt: now + hour };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + hour;
+  }
+  entry.count += 1;
+  chatRateLimit.set(ip, entry);
+  return entry.count <= 20;
+}
+
+app.options('/api/chat', chatCors);
+
+app.post('/api/chat', chatCors, async (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
+  if (message.length > 800) return res.status(400).json({ error: 'Message is too long' });
+
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(ip)) {
+    return res.status(429).json({ error: "You've sent a lot of messages — please try again in a bit, or email hello@zenflo.co.uk" });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error('Chat error: ANTHROPIC_API_KEY not set');
+    return res.status(500).json({ error: 'Chat is not configured yet. Please email hello@zenflo.co.uk' });
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 400,
+        system: `You are the friendly support assistant on the ZenFlo website. Answer ONLY using the information below. If the answer isn't in this information, say you're not sure and point the person to hello@zenflo.co.uk rather than guessing. Keep answers short (2-4 sentences), warm, and plain-English — many visitors have ADHD, so avoid long blocks of text. Never claim ZenFlo diagnoses, treats or manages ADHD as a medical condition; it's a productivity and structure tool.\n\n${ZENFLO_KNOWLEDGE}`,
+        messages: [{ role: 'user', content: message.trim() }]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Anthropic API error:', response.status, errText);
+      return res.status(502).json({ error: "Something went wrong on our end — try again, or email hello@zenflo.co.uk" });
+    }
+
+    const data = await response.json();
+    const reply = data.content && data.content[0] && data.content[0].text
+      ? data.content[0].text
+      : "Sorry, I couldn't work out an answer to that — try emailing hello@zenflo.co.uk";
+
+    res.json({ reply });
+  } catch (e) {
+    console.error('Chat error:', e);
+    res.status(500).json({ error: "Something went wrong — try again, or email hello@zenflo.co.uk" });
+  }
+});
+
 // ── FOUNDER ACCESS (personal bookmark login) ──────────────
 app.get('/founder-access', async (req, res) => {
   const key = req.query.key;
