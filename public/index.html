@@ -177,16 +177,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
   <div class="auth-logo">ZenFlo</div>
   <div class="auth-sub">Your ADHD workplace companion</div>
   <div class="auth-tabs">
-    <button class="auth-tab active" onclick="switchAuth('login')">Sign In</button>
-    <button class="auth-tab" onclick="switchAuth('register')">Create Account</button>
+    <button class="auth-tab" onclick="switchAuth('login')">Sign In</button>
+    <button class="auth-tab active" onclick="switchAuth('register')">Create Account</button>
   </div>
-  <div id="login-form">
+  <div id="login-form" style="display:none;">
     <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="field"><label>Password</label><input type="password" id="login-pw" placeholder="Your password" autocomplete="current-password"
       onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
   </div>
-  <div id="reg-form" style="display:none;">
+  <div id="reg-form">
     <div class="field"><label>Your Name</label><input type="text" id="reg-name" placeholder="First name" autocomplete="given-name"></div>
     <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="field"><label>Password</label><input type="password" id="reg-pw" placeholder="At least 6 characters" autocomplete="new-password"
@@ -413,20 +413,20 @@ function showPanel(id,btn){
 async function saveDump(){
   const c=document.getElementById('dump-input').value.trim();if(!c)return;
   const r=await fetch('/api/braindump',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
-  const d=await r.json();if(d.success){document.getElementById('dump-input').value='';flash('Saved \u2713');loadDumps();}
+  const d=await r.json();if(d.success){document.getElementById('dump-input').value='';flash('Saved ✓');loadDumps();}
 }
 async function loadDumps(){
   const r=await fetch('/api/braindump');const d=await r.json();
   const el=document.getElementById('dumps-list');
   if(!d.dumps.length){el.innerHTML='<div class="no-items">Your saved dumps will appear here</div>';return;}
-  el.innerHTML=d.dumps.map(x=>`<div class="dump-item"><button class="dump-del" onclick="deleteDump(${x.id})">\u2715</button><div class="dump-text">${esc(x.content)}</div><div class="dump-date">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');
+  el.innerHTML=d.dumps.map(x=>`<div class="dump-item"><button class="dump-del" onclick="deleteDump(${x.id})">✕</button><div class="dump-text">${esc(x.content)}</div><div class="dump-date">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');
 }
 async function deleteDump(id){await fetch('/api/braindump/'+id,{method:'DELETE'});loadDumps();}
 
 function addStepField(){
   stepCount++;const c=document.getElementById('steps-container');
   const row=document.createElement('div');row.className='step-row';
-  row.innerHTML=`<input class="task-input step-input" style="font-size:.84rem;" placeholder="Step ${stepCount}..."><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:0 5px;">\u2715</button>`;
+  row.innerHTML=`<input class="task-input step-input" style="font-size:.84rem;" placeholder="Step ${stepCount}..."><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:0 5px;">✕</button>`;
   c.appendChild(row);row.querySelector('input').focus();
 }
 async function saveTask(){
@@ -434,7 +434,7 @@ async function saveTask(){
   const steps=[...document.querySelectorAll('.step-input')].map(i=>i.value.trim()).filter(Boolean);
   const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,steps})});
   const d=await r.json();
-  if(d.success){document.getElementById('task-title').value='';document.getElementById('steps-container').innerHTML='';stepCount=0;flash('Task added \u2713');loadTasks();}
+  if(d.success){document.getElementById('task-title').value='';document.getElementById('steps-container').innerHTML='';stepCount=0;flash('Task added ✓');loadTasks();}
 }
 async function loadTasks(){
   const r=await fetch('/api/tasks');const d=await r.json();
@@ -442,7 +442,7 @@ async function loadTasks(){
   if(!d.tasks.length){el.innerHTML='<div class="no-items">No tasks yet — add your first above</div>';return;}
   el.innerHTML=d.tasks.map(t=>{
     const steps=Array.isArray(t.steps)?t.steps:(typeof t.steps==='string'?JSON.parse(t.steps):[]);
-    return `<div class="task-item ${t.completed?'done':''}"><div class="task-header"><div class="task-check ${t.completed?'checked':''}" onclick="toggleTask(${t.id},${!t.completed})">${t.completed?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="task-title-text">${esc(t.title)}</div><button class="task-del-btn" onclick="deleteTask(${t.id})">\u2715</button></div>${steps.length?`<div class="task-steps">${steps.map(s=>`<div class="task-step">${esc(s)}</div>`).join('')}</div>`:''}</div>`;
+    return `<div class="task-item ${t.completed?'done':''}"><div class="task-header"><div class="task-check ${t.completed?'checked':''}" onclick="toggleTask(${t.id},${!t.completed})">${t.completed?'<svg width="11" height="11" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="task-title-text">${esc(t.title)}</div><button class="task-del-btn" onclick="deleteTask(${t.id})">✕</button></div>${steps.length?`<div class="task-steps">${steps.map(s=>`<div class="task-step">${esc(s)}</div>`).join('')}</div>`:''}</div>`;
   }).join('');
 }
 async function toggleTask(id,comp){await fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({completed:comp})});loadTasks();}
@@ -464,14 +464,14 @@ function toggleScript(i){document.getElementById('sb-'+i)?.classList.toggle('ope
 function copyScript(i){
   const q=(document.getElementById('script-search')?.value||'').toLowerCase();
   const list=SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
-  navigator.clipboard.writeText(list[i]?.text||'').then(()=>flash('Script copied \u2713'));
+  navigator.clipboard.writeText(list[i]?.text||'').then(()=>flash('Script copied ✓'));
 }
 
 function setPreset(mins,btn){resetTimer();timerLeft=mins*60;timerTotal=mins*60;updateTimerDisplay();document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b===btn));}
 function toggleTimer(){
   if(timerRunning){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Resume';document.getElementById('timer-label').textContent='Paused';}
   else{timerRunning=true;document.getElementById('timer-start-btn').textContent='Pause';document.getElementById('timer-label').textContent="Focus time — you've got this";
-    timerInterval=setInterval(()=>{timerLeft--;updateTimerDisplay();if(timerLeft<=0){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Start';document.getElementById('timer-label').textContent="\u2705 Time's up! Take a break.";}},1000);}
+    timerInterval=setInterval(()=>{timerLeft--;updateTimerDisplay();if(timerLeft<=0){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Start';document.getElementById('timer-label').textContent="✅ Time's up! Take a break.";}},1000);}
 }
 function resetTimer(){clearInterval(timerInterval);timerRunning=false;document.getElementById('timer-start-btn').textContent='Start';document.getElementById('timer-label').textContent='Choose your focus time';updateTimerDisplay();}
 function updateTimerDisplay(){
@@ -497,7 +497,7 @@ async function loadCheckin(){
 function resetCheckin(){selectedMood=null;selectedEnergy=null;document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));document.querySelectorAll('.energy-dot').forEach(b=>b.classList.remove('selected'));document.getElementById('checkin-note').value='';document.getElementById('energy-label').textContent='Tap a dot';document.getElementById('checkin-form-wrap').style.display='';document.getElementById('checkin-done-wrap').style.display='none';}
 
 function renderWindDown(){document.getElementById('winddown-steps').innerHTML=WINDDOWN.map((w,i)=>`<div class="wd-step"><div class="wd-num">${i+1}</div><div class="wd-content"><h4>${w.title}</h4><p>${w.body}</p><button class="wd-check-btn" id="wdbtn-${i}" onclick="toggleWD(${i})">Mark done</button></div></div>`).join('');}
-function toggleWD(i){winddownState[i]=!winddownState[i];const b=document.getElementById('wdbtn-'+i);b.classList.toggle('done',winddownState[i]);b.textContent=winddownState[i]?'\u2713 Done':'Mark done';}
+function toggleWD(i){winddownState[i]=!winddownState[i];const b=document.getElementById('wdbtn-'+i);b.classList.toggle('done',winddownState[i]);b.textContent=winddownState[i]?'✓ Done':'Mark done';}
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 let flashT;function flash(msg){const el=document.getElementById('flash-msg');el.textContent=msg;el.style.display='block';clearTimeout(flashT);flashT=setTimeout(()=>el.style.display='none',2400);}
