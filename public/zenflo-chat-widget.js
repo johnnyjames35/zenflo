@@ -91,6 +91,18 @@
   document.body.appendChild(panel);
   document.body.appendChild(teaser);
 
+  // Inside the ZenFlo app there's a bottom nav bar (Dump/Tasks/Scripts/Timer/
+  // Check-In/Wind Down) that the marketing site doesn't have. If it's present,
+  // lift the widget above it so it doesn't sit on top of the nav buttons.
+  var bottomNav = document.querySelector('.bottom-nav');
+  if (bottomNav) {
+    var navHeight = bottomNav.offsetHeight || 60;
+    var lift = navHeight + 16;
+    bubble.style.bottom = lift + 'px';
+    panel.style.bottom = (lift + 70) + 'px';
+    teaser.style.bottom = (lift + 10) + 'px';
+  }
+
   var messagesEl = panel.querySelector('#zf-messages');
   var inputEl = panel.querySelector('#zf-input');
   var sendBtn = panel.querySelector('#zf-send');
