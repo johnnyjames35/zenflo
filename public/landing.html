@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-MQXB4QQLYS"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-MQXB4QQLYS');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ADHD Workplace Support App | ZenFlo</title>
@@ -208,6 +210,17 @@ footer{background:var(--navy2);border-top:1px solid var(--border);padding:28px 2
 <footer>
   &copy; 2026 ZenFlo &nbsp;·&nbsp; A Cambrian Digital product &nbsp;·&nbsp; <a href="https://app.zenflo.co.uk" style="color:var(--teal-light);">Sign In</a> &nbsp;·&nbsp; <a href="terms.html" style="color:var(--teal-light);">Terms</a> &nbsp;·&nbsp; <a href="privacy-policy.html" style="color:var(--teal-light);">Privacy</a>
 </footer>
+<script>
+document.querySelectorAll('a[href^="https://app.zenflo.co.uk"]').forEach(link => {
+  link.addEventListener('click', () => {
+    const label = (link.textContent || '').toLowerCase();
+    gtag('event', label.includes('trial') ? 'trial_start_click' : 'app_open_click', {
+      event_category: 'acquisition',
+      link_text: (link.textContent || '').trim()
+    });
+  });
+});
+</script>
 
 </body>
 </html>
