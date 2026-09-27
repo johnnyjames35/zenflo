@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zenflo-static-v2';
+const CACHE_NAME = 'zenflo-static-v3';
 const OFFLINE_URL = '/offline.html';
 const STATIC_ASSETS = [
   OFFLINE_URL,
@@ -21,6 +21,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  if (['/product-analytics.js','/analytics-events.js'].includes(url.pathname)) return;
   if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (event.request.mode === 'navigate') {

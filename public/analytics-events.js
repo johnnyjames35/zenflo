@@ -1,0 +1,1 @@
+(function(){document.addEventListener('click',function(e){const b=e.target.closest('.btn-nav-cta,.btn-hero-primary,.btn-plan');if(b&&b.closest('a')?.hostname==='app.zenflo.co.uk')window.productAnalytics?.capture('trial_click');});})();
