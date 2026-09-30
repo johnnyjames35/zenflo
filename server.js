@@ -503,7 +503,7 @@ and should never be described as doing so.
 PRICING
 - Free plan (£0): brain dump, 3 tasks/day, 10 workplace scripts, focus timer, daily check-in.
 - Pro plan: £9.99/month or £99/year, includes a 14-day free trial, no card required to start.
-  Pro unlocks unlimited tasks, 25+ workplace scripts, and the wind-down tool.
+  Pro unlocks unlimited tasks, all 25 workplace scripts, and the wind-down tool.
 - Sign up at https://app.zenflo.co.uk
 
 THE SIX CORE FEATURES
@@ -511,8 +511,8 @@ THE SIX CORE FEATURES
    tasks, worries and ideas. Best used first thing in the morning or whenever your head feels too full.
 2. Break It Down — splits any task into small, timed steps, with a "Start here, right now" prompt so you
    always know the very next action. Best for tasks that feel too big to start.
-3. Workplace Scripts — 40+ ready-made scripts for emails, meetings, deadline extensions and tricky
-   conversations, for when the right words won't come. Free plan includes 10, Pro unlocks 25+.
+3. Workplace Scripts — 25 ready-made scripts for emails, meetings, deadline extensions and tricky
+   conversations, for when the right words won't come. Free plan includes 10, Pro unlocks all 25.
 4. Focus Timer — structured focus sessions in manageable bursts with built-in rest, designed for the
    ADHD brain, so tasks actually get finished.
 5. Daily Check-in — log mood and energy at the start of the day; ZenFlo adapts the day's plan around how
