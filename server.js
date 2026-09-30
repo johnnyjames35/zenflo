@@ -14,6 +14,69 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
+// ── STRIPE WEBHOOK ────────────────────────────────────────
+// Must be registered BEFORE express.json(), because Stripe needs the raw,
+// unparsed request body to verify the signature.
+// Marks a user as Pro once Stripe confirms their payment, and back to Free
+// if their subscription is cancelled.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('Stripe webhook: STRIPE_WEBHOOK_SECRET not set');
+    return res.status(500).send('Webhook not configured');
+  }
+
+  let event;
+  try {
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_not_used_for_verification');
+    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], secret);
+  } catch (e) {
+    console.error('Stripe webhook signature check failed:', e.message);
+    return res.status(400).send('Invalid signature');
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') {
+        const customerId = session.customer || null;
+        let result = { rowCount: 0 };
+        const userId = parseInt(session.client_reference_id, 10);
+        if (Number.isInteger(userId)) {
+          result = await pool.query(
+            "UPDATE users SET plan='pro', stripe_customer_id=COALESCE($2, stripe_customer_id) WHERE id=$1",
+            [userId, customerId]
+          );
+        }
+        if (!result.rowCount) {
+          const email = ((session.customer_details && session.customer_details.email) || session.customer_email || '').toLowerCase();
+          if (email) {
+            result = await pool.query(
+              "UPDATE users SET plan='pro', stripe_customer_id=COALESCE($2, stripe_customer_id) WHERE email=$1",
+              [email, customerId]
+            );
+          }
+        }
+        if (!result.rowCount) {
+          console.error('Stripe webhook: payment received but no matching ZenFlo user', session.id);
+        } else {
+          console.log('Stripe webhook: user upgraded to Pro');
+        }
+      }
+    } else if (event.type === 'customer.subscription.deleted') {
+      const customerId = event.data.object.customer;
+      if (customerId) {
+        await pool.query("UPDATE users SET plan='free' WHERE stripe_customer_id=$1 AND plan='pro'", [customerId]);
+        console.log('Stripe webhook: subscription ended, user set back to Free');
+      }
+    }
+    res.json({ received: true });
+  } catch (e) {
+    console.error('Stripe webhook handler error:', e);
+    res.status(500).send('Webhook handler failed');
+  }
+});
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -164,13 +227,34 @@ function requireAuth(req, res, next) {
   next();
 }
 
+const TRIAL_DAYS = 14;
+const FREE_TASKS_PER_DAY = 3;
+
 function isPro(user) {
   if (user.plan === 'pro') return true;
   // 14-day free trial
   const trialStart = new Date(user.trial_start);
   const now = new Date();
   const daysDiff = (now - trialStart) / (1000 * 60 * 60 * 24);
-  return daysDiff <= 14;
+  return daysDiff <= TRIAL_DAYS;
+}
+
+// Whole days left in the free trial (0 once it has ended or for paid users)
+function trialDaysLeft(user) {
+  if (user.plan === 'pro') return 0;
+  const daysDiff = (new Date() - new Date(user.trial_start)) / (1000 * 60 * 60 * 24);
+  return Math.max(0, Math.ceil(TRIAL_DAYS - daysDiff));
+}
+
+function userPayload(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    plan: user.plan,
+    isPro: isPro(user),
+    trialDaysLeft: trialDaysLeft(user)
+  };
 }
 
 // ── ROUTES: AUTH ─────────────────────────────────────────
@@ -191,7 +275,7 @@ app.post('/api/register', async (req, res) => {
     const user = result.rows[0];
     req.session.userId = user.id;
     req.session.userName = user.name;
-    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+    res.json({ success: true, user: userPayload(user) });
   } catch (e) {
     console.error(e);
     res.json({ error: 'Registration failed' });
@@ -208,7 +292,7 @@ app.post('/api/login', async (req, res) => {
     if (!match) return res.json({ error: 'Incorrect password' });
     req.session.userId = user.id;
     req.session.userName = user.name;
-    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+    res.json({ success: true, user: userPayload(user) });
   } catch (e) {
     res.json({ error: 'Login failed' });
   }
@@ -224,7 +308,7 @@ app.get('/api/me', async (req, res) => {
     const result = await pool.query('SELECT id, name, email, plan, trial_start FROM users WHERE id=$1', [req.session.userId]);
     if (!result.rows.length) return res.json({ loggedIn: false });
     const user = result.rows[0];
-    res.json({ loggedIn: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, isPro: isPro(user) } });
+    res.json({ loggedIn: true, user: userPayload(user) });
   } catch (e) {
     res.json({ loggedIn: false });
   }
@@ -271,6 +355,21 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
   const { title, steps } = req.body;
   if (!title) return res.json({ error: 'Task title required' });
   try {
+    // Free plan (trial ended, not paid): limited to 3 new tasks per day
+    const userResult = await pool.query('SELECT id, plan, trial_start FROM users WHERE id=$1', [req.session.userId]);
+    if (!userResult.rows.length) return res.json({ error: 'Not logged in' });
+    if (!isPro(userResult.rows[0])) {
+      const countResult = await pool.query(
+        "SELECT COUNT(*)::int AS n FROM tasks WHERE user_id=$1 AND created_at >= date_trunc('day', NOW())",
+        [req.session.userId]
+      );
+      if (countResult.rows[0].n >= FREE_TASKS_PER_DAY) {
+        return res.json({
+          error: `Free plan includes ${FREE_TASKS_PER_DAY} new tasks a day. Upgrade to Pro for unlimited tasks.`,
+          limitReached: true
+        });
+      }
+    }
     const result = await pool.query(
       'INSERT INTO tasks (user_id, title, steps) VALUES ($1,$2,$3) RETURNING *',
       [req.session.userId, title.trim(), JSON.stringify(steps || [])]
@@ -368,17 +467,26 @@ app.delete('/api/account', requireAuth, async (req, res) => {
 });
 
 // ── ROUTES: STRIPE PAYMENT LINKS ─────────────────────────
-app.get('/api/upgrade/monthly', requireAuth, (req, res) => {
-  const link = process.env.STRIPE_MONTHLY_LINK;
+// The user's ZenFlo id and email are attached to the Stripe link so the
+// webhook above knows which account to upgrade once payment completes.
+async function sendToPaymentLink(req, res, link) {
   if (!link) return res.status(500).json({ error: 'Payment link not configured' });
-  res.redirect(link);
-});
+  try {
+    const result = await pool.query('SELECT id, email FROM users WHERE id=$1', [req.session.userId]);
+    if (!result.rows.length) return res.status(401).json({ error: 'Not logged in' });
+    const url = new URL(link);
+    url.searchParams.set('client_reference_id', String(result.rows[0].id));
+    url.searchParams.set('prefilled_email', result.rows[0].email);
+    res.redirect(url.toString());
+  } catch (e) {
+    console.error('Upgrade link error:', e);
+    res.redirect(link);
+  }
+}
 
-app.get('/api/upgrade/annual', requireAuth, (req, res) => {
-  const link = process.env.STRIPE_ANNUAL_LINK;
-  if (!link) return res.status(500).json({ error: 'Payment link not configured' });
-  res.redirect(link);
-});
+app.get('/api/upgrade/monthly', requireAuth, (req, res) => sendToPaymentLink(req, res, process.env.STRIPE_MONTHLY_LINK));
+
+app.get('/api/upgrade/annual', requireAuth, (req, res) => sendToPaymentLink(req, res, process.env.STRIPE_ANNUAL_LINK));
 
 // ── ROUTES: AI CHAT WIDGET ────────────────────────────────
 // Public-facing support bot for zenflo.co.uk and app.zenflo.co.uk.
