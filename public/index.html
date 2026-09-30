@@ -67,6 +67,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
 .badge-free{background:var(--navy3);color:var(--muted);font-size:.68rem;font-weight:600;padding:3px 8px;border-radius:20px;border:1px solid var(--border);}
 .btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:.76rem;padding:5px 11px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
 .btn-logout:hover{color:var(--white);}
+.badge-free,.badge-pro{white-space:nowrap;}
+@media (max-width:480px){
+  .top-bar{padding:0 10px;}
+  .top-logo{font-size:1.05rem;}
+  .top-right{gap:5px;}
+  #top-name{display:none;}
+  .badge-free,.badge-pro{font-size:.62rem;padding:3px 6px;}
+  #upgrade-btn{padding:5px 8px !important;font-size:.7rem !important;}
+  .btn-logout{padding:5px 6px;font-size:.66rem;white-space:nowrap;}
+}
+@media (max-width:380px){
+  .sp{display:none;}
+  .top-bar{gap:6px;}
+  .top-logo{font-size:.95rem;}
+  .btn-logout{padding:5px 5px;font-size:.62rem;}
+}
 .content{flex:1;padding:22px 18px;max-width:680px;margin:0 auto;width:100%;}
 .panel{display:none;}
 .panel.active{display:block;}
@@ -206,7 +222,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
     <div class="top-logo">ZenFlo</div>
     <div class="top-right">
       <span id="top-badge"></span>
-<a id="upgrade-btn" href="/api/upgrade/monthly" style="display:none;padding:5px 11px;background:var(--amber);color:var(--navy);font-size:.76rem;font-weight:700;border-radius:8px;text-decoration:none;">Upgrade ✨</a>
+<a id="upgrade-btn" href="/api/upgrade/monthly" style="display:none;padding:5px 11px;background:var(--amber);color:var(--navy);font-size:.76rem;font-weight:700;border-radius:8px;text-decoration:none;white-space:nowrap;">Upgrade<span class="sp"> ✨</span></a>
       <span id="top-name" style="font-size:.83rem;color:var(--muted);"></span>
       <button class="btn-logout" onclick="deleteAccount()" title="Permanently delete your ZenFlo account and data">Delete account</button>
       <button class="btn-logout" onclick="doLogout()">Sign out</button>
@@ -240,6 +256,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);
           <div id="steps-container" class="steps-list"></div>
           <button class="add-step" onclick="addStepField()">+ Add a step</button>
           <button class="btn-teal" onclick="saveTask()" style="align-self:flex-start;padding:9px 20px;">Add Task</button>
+          <div id="task-limit-note" style="display:none;margin-top:4px;padding:11px 13px;border:1px solid var(--amber);border-radius:10px;font-size:.84rem;line-height:1.6;color:var(--white);">You've reached the free plan's 3 new tasks a day. <a href="/api/upgrade/monthly" style="color:var(--amber);font-weight:700;">Upgrade to Pro</a> for unlimited tasks.</div>
         </div>
       </div>
       <div id="tasks-list"></div>
@@ -379,10 +396,14 @@ function showApp(){
   document.getElementById('app-screen').style.display='flex';
   document.getElementById('top-name').textContent=currentUser.name;
   const b=document.getElementById('top-badge');
-  b.textContent=currentUser.isPro?'PRO':'Free Trial';
-  b.className=currentUser.isPro?'badge-pro':'badge-free';
+  const isPaid=currentUser.plan==='pro';
+  const daysLeft=currentUser.trialDaysLeft||0;
+  if(isPaid){b.textContent='PRO';b.className='badge-pro';}
+  else if(currentUser.isPro){b.textContent=daysLeft+(daysLeft===1?' day left':' days left');b.title='Your free Pro trial';b.className='badge-free';}
+  else{b.textContent='Free';b.className='badge-free';}
   const ub=document.getElementById('upgrade-btn');
-  if(ub)ub.style.display=currentUser.isPro?'none':'inline-block';
+  if(ub)ub.style.display=isPaid?'none':'inline-block';
+  renderScriptList();renderWindDown();
   loadDumps();loadTasks();loadCheckin();
 }
 function switchAuth(tab){
@@ -440,7 +461,9 @@ async function saveTask(){
   const steps=[...document.querySelectorAll('.step-input')].map(i=>i.value.trim()).filter(Boolean);
   const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,steps})});
   const d=await r.json();
-  if(d.success){document.getElementById('task-title').value='';document.getElementById('steps-container').innerHTML='';stepCount=0;flash('Task added ✓');loadTasks();}
+  if(d.success){document.getElementById('task-limit-note').style.display='none';document.getElementById('task-title').value='';document.getElementById('steps-container').innerHTML='';stepCount=0;flash('Task added ✓');loadTasks();}
+  else if(d.limitReached){document.getElementById('task-limit-note').style.display='block';}
+  else if(d.error){flash(d.error,6000);}
 }
 async function loadTasks(){
   const r=await fetch('/api/tasks');const d=await r.json();
@@ -461,16 +484,25 @@ function renderScripts(){
   renderScriptList();
 }
 function setCat(cat,btn){activeScriptCat=cat;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderScriptList();}
-function renderScriptList(){
+// Free plan (after the 14-day trial, unpaid) gets 10 of the scripts; Pro gets all of them.
+const FREE_SCRIPT_INDEXES=[0,1,3,4,7,8,11,12,21,22];
+function scriptLocked(s){return !(currentUser&&currentUser.isPro)&&!FREE_SCRIPT_INDEXES.includes(SCRIPTS.indexOf(s));}
+function filteredScripts(){
   const q=(document.getElementById('script-search')?.value||'').toLowerCase();
-  const list=SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
-  document.getElementById('scripts-list').innerHTML=list.length?list.map((s,i)=>`<div class="script-card"><div class="script-header" onclick="toggleScript(${i})"><div class="script-icon">${s.icon}</div><div><div class="script-name">${s.name}</div><div class="script-cat-tag">${s.cat}</div></div></div><div class="script-body" id="sb-${i}"><div class="script-text">${esc(s.text)}</div><button class="copy-btn" onclick="copyScript(${i})">📋 Copy script</button></div></div>`).join(''):'<div class="no-items">No scripts found</div>';
+  return SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
+}
+function renderScriptList(){
+  const list=filteredScripts();
+  document.getElementById('scripts-list').innerHTML=list.length?list.map((s,i)=>{
+    const locked=scriptLocked(s);
+    return `<div class="script-card"><div class="script-header" onclick="toggleScript(${i})"><div class="script-icon">${locked?'🔒':s.icon}</div><div><div class="script-name">${s.name}</div><div class="script-cat-tag">${s.cat}${locked?' · Pro':''}</div></div></div><div class="script-body" id="sb-${i}">${locked?`<div class="script-text">This script is part of ZenFlo Pro.</div><a class="copy-btn" href="/api/upgrade/monthly" style="display:inline-block;text-decoration:none;">Upgrade to unlock ✨</a>`:`<div class="script-text">${esc(s.text)}</div><button class="copy-btn" onclick="copyScript(${i})">📋 Copy script</button>`}</div></div>`;
+  }).join(''):'<div class="no-items">No scripts found</div>';
 }
 function toggleScript(i){document.getElementById('sb-'+i)?.classList.toggle('open');}
 function copyScript(i){
-  const q=(document.getElementById('script-search')?.value||'').toLowerCase();
-  const list=SCRIPTS.filter(s=>(activeScriptCat==='All'||s.cat===activeScriptCat)&&(!q||s.name.toLowerCase().includes(q)||s.text.toLowerCase().includes(q)));
-  navigator.clipboard.writeText(list[i]?.text||'').then(()=>flash('Script copied ✓'));
+  const s=filteredScripts()[i];
+  if(!s||scriptLocked(s))return;
+  navigator.clipboard.writeText(s.text||'').then(()=>flash('Script copied ✓'));
 }
 
 function setPreset(mins,btn){resetTimer();timerLeft=mins*60;timerTotal=mins*60;updateTimerDisplay();document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b===btn));}
@@ -502,11 +534,18 @@ async function loadCheckin(){
 }
 function resetCheckin(){selectedMood=null;selectedEnergy=null;document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));document.querySelectorAll('.energy-dot').forEach(b=>b.classList.remove('selected'));document.getElementById('checkin-note').value='';document.getElementById('energy-label').textContent='Tap a dot';document.getElementById('checkin-form-wrap').style.display='';document.getElementById('checkin-done-wrap').style.display='none';}
 
-function renderWindDown(){document.getElementById('winddown-steps').innerHTML=WINDDOWN.map((w,i)=>`<div class="wd-step"><div class="wd-num">${i+1}</div><div class="wd-content"><h4>${w.title}</h4><p>${w.body}</p><button class="wd-check-btn" id="wdbtn-${i}" onclick="toggleWD(${i})">Mark done</button></div></div>`).join('');}
+function renderWindDown(){
+  const el=document.getElementById('winddown-steps');
+  if(currentUser&&!currentUser.isPro){
+    el.innerHTML='<div class="card" style="text-align:center;"><div style="font-size:1.6rem;margin-bottom:8px;">🔒</div><div class="card-label">Wind Down is part of ZenFlo Pro</div><p style="font-size:.85rem;color:var(--muted);line-height:1.7;margin:8px 0 14px;">An end-of-day routine to note what got done, park what is unfinished, and close the day without a guilt spiral.</p><a class="copy-btn" href="/api/upgrade/monthly" style="display:inline-block;text-decoration:none;">Upgrade to unlock ✨</a></div>';
+    return;
+  }
+  el.innerHTML=WINDDOWN.map((w,i)=>`<div class="wd-step"><div class="wd-num">${i+1}</div><div class="wd-content"><h4>${w.title}</h4><p>${w.body}</p><button class="wd-check-btn" id="wdbtn-${i}" onclick="toggleWD(${i})">Mark done</button></div></div>`).join('');
+}
 function toggleWD(i){winddownState[i]=!winddownState[i];const b=document.getElementById('wdbtn-'+i);b.classList.toggle('done',winddownState[i]);b.textContent=winddownState[i]?'✓ Done':'Mark done';}
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-let flashT;function flash(msg){const el=document.getElementById('flash-msg');el.textContent=msg;el.style.display='block';clearTimeout(flashT);flashT=setTimeout(()=>el.style.display='none',2400);}
+let flashT;function flash(msg,ms){const el=document.getElementById('flash-msg');el.textContent=msg;el.style.display='block';clearTimeout(flashT);flashT=setTimeout(()=>el.style.display='none',ms||2400);}
 
 async function deleteAccount() {
   const password = window.prompt("To permanently delete your ZenFlo account and all saved data, enter your password:");
