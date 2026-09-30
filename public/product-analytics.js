@@ -104,13 +104,13 @@
     if (!EXTERNAL_CONSENT && !excluded()) {
       const panel = document.createElement('section');
       panel.id = 'product-analytics-consent'; panel.setAttribute('aria-label', 'Optional analytics');
-      panel.style.cssText = 'position:fixed;bottom:55px;left:16px;right:16px;max-width:620px;z-index:2147483646;padding:18px;background:#10232b;color:white;border-radius:12px;box-shadow:0 3px 18px #0005;font:14px/1.5 system-ui';
+      panel.style.cssText = 'position:fixed;bottom:122px;left:16px;right:16px;max-width:620px;z-index:2147483646;padding:18px;background:#10232b;color:white;border-radius:12px;box-shadow:0 3px 18px #0005;font:14px/1.5 system-ui';
       panel.innerHTML = '<p>Allow optional product analytics and masked session replay to help improve this app? Data is processed by PostHog in the EU. Personal content is excluded. <a style="color:white;text-decoration:underline" href="/privacy-policy.html">Privacy details</a></p><button type="button" data-choice="yes">Allow</button> <button type="button" data-choice="no">No thanks</button>';
       panel.hidden = !!choice;
       panel.addEventListener('click', e => { const button = e.target.closest('[data-choice]'); if (!button) return; consent(button.dataset.choice === 'yes'); panel.hidden = true; });
       const choices = document.createElement('button');
       choices.type = 'button'; choices.textContent = 'Analytics choices';
-      choices.style.cssText = 'position:fixed;bottom:10px;left:10px;z-index:2147483646;padding:8px 12px;border-radius:8px;background:#10232b;color:white;font:13px system-ui;cursor:pointer';
+      choices.style.cssText = 'position:fixed;bottom:74px;left:10px;z-index:2147483646;padding:8px 12px;border-radius:8px;background:#10232b;color:white;font:13px system-ui;cursor:pointer';
       choices.addEventListener('click', () => { panel.hidden = false; });
       document.body.append(panel, choices);
       start(); page();
