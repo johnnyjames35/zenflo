@@ -218,6 +218,11 @@ async function initDB() {
     );
   `);
 
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS nudge_stage INTEGER DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_optout BOOLEAN DEFAULT false;
+  `);
+
   console.log('✅ Database ready');
 }
 
@@ -643,6 +648,121 @@ app.get('/founder-access', async (req, res) => {
   }
 });
 
+// ── NUDGE EMAILS (day 1 / 3 / 7 after sign-up) ─────────────
+// Short, friendly emails to NEW free users only (signed up within the last
+// 10 days). Skipped if the user already used the app in the last 24 hours,
+// and never sent twice. Each email has an unsubscribe link.
+const crypto = require('crypto');
+const NUDGE_BASE = 'https://app.zenflo.co.uk';
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function unsubToken(id) {
+  return crypto.createHmac('sha256', process.env.SESSION_SECRET || 'zenflo').update('unsub:' + id).digest('hex').slice(0, 32);
+}
+function unsubLink(id) { return NUDGE_BASE + '/unsubscribe?u=' + id + '&t=' + unsubToken(id); }
+function dueNudgeStage(ageDays) { return ageDays >= 7 ? 3 : ageDays >= 3 ? 2 : ageDays >= 1 ? 1 : 0; }
+
+async function sendBrevoEmail({ to, subject, html }) {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'api-key': process.env.BREVO_API_KEY },
+    body: JSON.stringify({
+      sender: { name: 'John at ZenFlo', email: 'johnjames@bigbulldog.co.uk' },
+      replyTo: { name: 'ZenFlo', email: 'hello@zenflo.co.uk' },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html
+    })
+  });
+  if (!response.ok) throw new Error('Brevo error: ' + (await response.text()));
+  return response.json();
+}
+
+function nudgeEmail(stage, user) {
+  const name = escHtml(user.name);
+  const copy = {
+    1: { subject: 'One thing, 30 seconds', lines: [
+      'No setup needed.',
+      'Open ZenFlo, type one thing that is on your mind, and tap Save. That is the whole thing.'] },
+    2: { subject: 'Putting something off?', lines: [
+      'If there is a task you keep avoiding, ZenFlo can shrink it.',
+      'Type the task, add just the first tiny step, and stop there.'] },
+    3: { subject: 'About a week left of your free Pro trial', lines: [
+      'You have about a week left of your free Pro trial.',
+      'If ZenFlo has helped even once, brilliant. If it has not, just hit reply and tell me what got in the way. One line is plenty.'] }
+  }[stage];
+  const p = 'style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1f2a37;"';
+  const html = '<div style="background:#f4f7f5;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">' +
+    '<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;">' +
+    '<div style="background:#0D1B2A;padding:20px 24px;"><span style="color:#4DC4A0;font-size:24px;font-weight:bold;">ZenFlo</span></div>' +
+    '<div style="padding:28px 24px 12px;">' +
+    '<p ' + p + '>Hi ' + name + ',</p>' +
+    copy.lines.map(l => '<p ' + p + '>' + l + '</p>').join('') +
+    '<p style="margin:24px 0;"><a href="' + NUDGE_BASE + '/" style="background:#1B8A6B;color:#ffffff;padding:14px 26px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block;">Open ZenFlo</a></p>' +
+    '<p ' + p + '>John</p></div>' +
+    '<div style="padding:16px 24px 24px;border-top:1px solid #e5e9e7;font-size:12px;line-height:1.5;color:#6b7280;">' +
+    'You are getting this because you signed up to ZenFlo. ZenFlo is a service of Big Bulldog UK Ltd. ' +
+    '<a href="' + unsubLink(user.id) + '" style="color:#6b7280;">Unsubscribe</a></div>' +
+    '</div></div>';
+  return { subject: copy.subject, html };
+}
+
+async function runNudges() {
+  if (!process.env.BREVO_API_KEY) return;
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.email, COALESCE(u.nudge_stage, 0) AS nudge_stage,
+             EXTRACT(EPOCH FROM (NOW() - u.created_at)) / 86400 AS age_days,
+             (EXISTS (SELECT 1 FROM brain_dumps b WHERE b.user_id = u.id AND b.created_at > NOW() - INTERVAL '24 hours')
+              OR EXISTS (SELECT 1 FROM tasks t WHERE t.user_id = u.id AND t.created_at > NOW() - INTERVAL '24 hours')
+              OR EXISTS (SELECT 1 FROM checkins c WHERE c.user_id = u.id AND c.created_at > NOW() - INTERVAL '24 hours')) AS active_today
+      FROM users u
+      WHERE u.plan = 'free'
+        AND COALESCE(u.email_optout, false) = false
+        AND COALESCE(u.nudge_stage, 0) < 3
+        AND u.created_at > NOW() - INTERVAL '10 days'
+        AND u.created_at <= NOW() - INTERVAL '1 day'
+        AND u.email <> 'founder@zenflo.co.uk'
+      LIMIT 20`);
+    for (const u of result.rows) {
+      const due = dueNudgeStage(Number(u.age_days));
+      if (due <= Number(u.nudge_stage)) continue;
+      const claimed = await pool.query(
+        'UPDATE users SET nudge_stage=$2 WHERE id=$1 AND COALESCE(nudge_stage,0) < $2', [u.id, due]);
+      if (!claimed.rowCount) continue;
+      if (u.active_today) continue;
+      try {
+        const mail = nudgeEmail(due, u);
+        await sendBrevoEmail({ to: u.email, subject: mail.subject, html: mail.html });
+        console.log('Nudge email ' + due + ' sent to user ' + u.id);
+      } catch (e) {
+        console.error('Nudge email failed for user ' + u.id + ':', e.message);
+      }
+    }
+  } catch (e) {
+    console.error('Nudge run failed:', e.message);
+  }
+}
+function startNudges() {
+  setTimeout(runNudges, 60 * 1000);
+  setInterval(runNudges, 60 * 60 * 1000);
+}
+
+app.get('/unsubscribe', async (req, res) => {
+  const id = parseInt(req.query.u, 10);
+  const t = String(req.query.t || '');
+  const ok = Number.isInteger(id) && t.length === 32 &&
+    crypto.timingSafeEqual(Buffer.from(t), Buffer.from(unsubToken(id)));
+  if (!ok) return res.status(400).send('This unsubscribe link is not valid.');
+  try {
+    await pool.query('UPDATE users SET email_optout=true WHERE id=$1', [id]);
+    res.send('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial,sans-serif;background:#0D1B2A;color:#F4F7F5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;"><div style="max-width:420px;padding:24px;text-align:center;"><h2 style="color:#4DC4A0;">You are unsubscribed</h2><p>We will not send you any more ZenFlo reminder emails.</p></div></body>');
+  } catch (e) {
+    res.status(500).send('Something went wrong. Please email hello@zenflo.co.uk');
+  }
+});
+
 // ── SERVE APP ─────────────────────────────────────────────
 app.get('*', (req, res) => {
   const host = req.headers.host || '';
@@ -655,6 +775,7 @@ app.get('*', (req, res) => {
 // ── START ─────────────────────────────────────────────────
 initDB().then(() => {
   app.listen(PORT, () => console.log(`🌿 ZenFlo running on port ${PORT}`));
+  startNudges();
 }).catch(e => {
   console.error('DB init failed:', e);
   process.exit(1);
