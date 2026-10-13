@@ -440,12 +440,12 @@ function showPanel(id,btn){
 async function saveDump(){
   const c=document.getElementById('dump-input').value.trim();if(!c)return;
   const r=await fetch('/api/braindump',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
-  const d=await r.json();if(d.success){document.getElementById('dump-input').value='';flash('Saved ✓');loadDumps();}
+  const d=await r.json();if(d.success){const first=!document.querySelector('#dumps-list .dump-item');document.getElementById('dump-input').value='';flash(first?"Done. That's out of your head ✓":'Saved ✓');await loadDumps();if(first)document.getElementById('dumps-list').insertAdjacentHTML('afterbegin','<div class="no-items" style="color:var(--teal-light);font-size:.92rem;line-height:1.7;padding:6px 0 16px;">Done. That is out of your head ✓<br>Come back any time something is rattling around.</div>');}
 }
 async function loadDumps(){
   const r=await fetch('/api/braindump');const d=await r.json();
   const el=document.getElementById('dumps-list');
-  if(!d.dumps.length){el.innerHTML='<div class="no-items">Your saved dumps will appear here</div>';return;}
+  if(!d.dumps.length){el.innerHTML='<div class="no-items" style="color:var(--teal-light);font-size:.92rem;line-height:1.7;">Start here: type one thing on your mind in the box above, then tap <strong>Save &amp; Clear</strong>.<br>That is all you need to do first.</div>';return;}
   el.innerHTML=d.dumps.map(x=>`<div class="dump-item"><button class="dump-del" onclick="deleteDump(${x.id})">✕</button><div class="dump-text">${esc(x.content)}</div><div class="dump-date">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');
 }
 async function deleteDump(id){await fetch('/api/braindump/'+id,{method:'DELETE'});loadDumps();}
