@@ -4,6 +4,7 @@ const PgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const path = require('path');
+const { getTrafficSummary } = require('./lib/admin-traffic.cjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -120,6 +121,11 @@ app.get('/admin/logout', (req, res) => {
 app.get('/admin/dashboard', (req, res) => {
   if (!req.session.isAdmin) return res.redirect('/admin/login');
   res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
+});
+
+app.get('/admin/traffic', requireAdmin, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json(await getTrafficSummary({ hosts: ['zenflo.co.uk', 'www.zenflo.co.uk', 'app.zenflo.co.uk'] }));
 });
 
 app.get('/admin/data', requireAdmin, async (req, res) => {
