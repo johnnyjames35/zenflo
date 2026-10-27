@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {getTrafficSummary,reportRequests}=require('../lib/admin-traffic.cjs');
 const now=Date.parse('2026-10-27T16:00:00Z');
-const report=(users,views)=>({metricHeaders:[{name:'totalUsers'},{name:'screenPageViews'}],metadata:{timeZone:'Etc/GMT'},rows:users===null?undefined:[{metricValues:[{value:String(users)},{value:String(views)}]}]});
+const report=(users,views)=>({kind:'analyticsData#runReport',metricHeaders:users===null?undefined:[{name:'totalUsers'},{name:'screenPageViews'}],metadata:{timeZone:'Etc/GMT'},rows:users===null?undefined:[{metricValues:[{value:String(users)},{value:String(views)}]}]});
 test('visitor queries filter site, page views and private routes, without summing daily users',()=>{
  const requests=reportRequests(['kelvori.co.uk'],now);
  assert.deepEqual(requests.map(r=>r.dateRanges[0]),[{startDate:'2026-10-27',endDate:'2026-10-27'},{startDate:'2026-10-21',endDate:'2026-10-27'},{startDate:'2026-09-28',endDate:'2026-10-27'}]);
